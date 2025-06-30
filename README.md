@@ -42,8 +42,7 @@ and change that to:
 - go into ```services/renderer/scripts```
 - go to the scripts folder, go into the ```player``` folder and in each file, replace ```http://bb.zawg.ca``` and ```https://bb.zawg.ca``` with your domain.
 - in the ```asset``` folder's files, do the same thing. make sure to not replace the ```http``` and ```https```, if something is HTTP keep it that way.
-
-Now, go back into the renderer and run ```npm i```, then ```npm run build```
+- now go back into the renderer and run ```npm i```, then ```npm run build```
 
 ## discord
 
