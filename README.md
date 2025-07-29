@@ -27,8 +27,8 @@ this guide will be mostly a mix of the original one, and some things i added.
 
 ```psql --username=** --dbname=* < schema.sql```
 
-- * = the name of the database you want to use, if this is your first time installing, use postgres
-- ** = your postgres username, default is postgres if you didn't set any in the setup
+- ```*``` = the name of the database you want to use, if this is your first time installing, use postgres
+- ```**``` = your postgres username, default is postgres if you didn't set any in the setup
 
 ## setting up
 
@@ -40,8 +40,8 @@ to:
 
 ``` "Postgres": "Host=127.0.0.1; Database=*; Password=your Postgres password; Username=**; Maximum Pool Size=20",```
 
-- * = the name of the database you want to use, if this is your first time installing, use postgres
-- ** = your postgres username, default is postgres if you didn't set any in the setup
+- ```*``` = the name of the database you want to use, if this is your first time installing, use postgres
+- ```**``` = your postgres username, default is postgres if you didn't set any in the setup
 
 - press ```CTRL + H``` and change ```C:\\Users\\Admin\\Desktop\\Revival\\ecsr\\ecsrev-main\\services\\``` to ```C:\\whereever your ECS folder is\\``` (make sure it's double slashed! so it should look like ```C:\\folder1\\folder2\\```)
 - you should update everything in the appsettings.json file to your configuration.
