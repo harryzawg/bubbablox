@@ -19,9 +19,12 @@ this guide will be mostly a mix of the original one, and some things i added.
 - <a href="https://go.dev/dl/go1.20.6.windows-amd64.msi">Go</a>, *for asset validation*
 
 ## requirements
-- at least Windows 10, Linux is untested as my server is a Windows machine. You should use Wine to run everything if you are using linux
+- Windows 10 or 11
 - a 10 character long domain with SSL for HTTPS
 - knowledge on how things like this work (you should have at least some experience with websites and coding to be able to host this. it's really not hard to set up if you know what you're doing.)
+
+> [!NOTE]
+> i haven't tested this on linux, it could work completely fine or be the worst code that has ever been run on a linux machine. either way, you should probably be using wine to run all of this in the event that you are using linux for this.
 
 ## database
 
