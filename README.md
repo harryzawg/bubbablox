@@ -4,6 +4,9 @@
     </p>
 </div>
 
+> [!IMPORTANT]
+> this guide as well as source code is provided as-is, i will not respond to any DMs or help people who wish to set this up.
+
 this guide will be mostly a mix of the original one, and some things i added.
 
 (original guide by <a href="https://github.com/SrCookie450">SrCookie450</a>, changed and site fixed by <a href="https://github.com/harryzawg">harryzawg</a>)
