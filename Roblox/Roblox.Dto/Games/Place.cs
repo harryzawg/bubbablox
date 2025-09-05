@@ -17,7 +17,8 @@ public class PlaceEntry
     public string imageToken => "T_" + placeId + "_icon";
     public string reasonProhibited { get; set; } = "None";
     public int maxPlayerCount { get; set; }
-	public bool gearPermissions { get; set; }
+    public bool gearPermissions { get; set; }
+    public int year { get; set; } = 2016;
     public Genre genre { get; set; }
     public ModerationStatus moderationStatus { get; set; }
     public DateTime created { get; set; }

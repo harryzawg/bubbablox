@@ -876,6 +876,14 @@ public class AssetsService : ServiceBase, IService
         Type.RightLeg,
         Type.LeftLeg,
         Type.Package,
+		Type.ClimbAnimation,
+		Type.FallAnimation,
+		Type.IdleAnimation,
+		Type.JumpAnimation,
+		Type.RunAnimation,
+		Type.SwimAnimation,
+		Type.WalkAnimation,
+		Type.EmoteAnimation,
     };
 
 	public async Task<Dto.Assets.CreateResponse> CreateAsset(string name, string? description, long creatorUserId,
@@ -1153,6 +1161,16 @@ public class AssetsService : ServiceBase, IService
         if (entry.Count <= 0) throw new RecordNotFoundException("Asset " + assetId + " does not exist");
         return entry[0];
     }
+	
+	public async Task<IEnumerable<ItemRestrictions>> MultiGetAssetRestrictions(IEnumerable<long> listIds) {
+		return await db.QueryAsync<ItemRestrictions>(@"
+			SELECT 
+				is_limited as isLimited,
+				is_limited_unique as isLimitedUnique,
+				id as assetId
+			FROM asset WHERE id = ANY(:assetIds) ORDER BY updated_at DESC LIMIT 200", new { assetIds = listIds.ToList() }
+		);
+	}
 
     private static Dictionary<long, Tuple<DateTime, long>> saleCounts { get; } = new();
     private static Object saleCountsLock { get; } = new();

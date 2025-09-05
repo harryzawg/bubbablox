@@ -49,7 +49,7 @@ const wardrobeItems = [
     ]
   },
   {
-    label: 'Accessories',
+    label: 'Accessories |',
     categories: [
       {
         id: 8,
@@ -112,6 +112,43 @@ const wardrobeItems = [
         id: 32,
         name: 'Packages',
       }
+    ]
+  },
+  {
+    label: 'Animations |',
+    categories: [
+      {
+        id: 48,
+        name: 'Climb',
+      },
+      {
+        id: 50,
+        name: 'Fall',
+      },
+      {
+        id: 51,
+        name: 'Idle',
+      },
+      {
+        id: 52,
+        name: 'Jump',
+      },
+      {
+        id: 53,
+        name: 'Run',
+      },
+      {
+        id: 54,
+        name: 'Swim',
+      },
+	  {
+        id: 55,
+        name: 'Walk',
+      },
+	  {
+		id: 61,
+		name: 'Emotes',
+	  }
     ]
   }
 ];

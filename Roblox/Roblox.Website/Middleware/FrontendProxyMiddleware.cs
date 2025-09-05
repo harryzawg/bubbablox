@@ -25,6 +25,7 @@ public class FrontendProxyMiddleware
         "/apisite/",
         "/api/",
         "/api/economy-chat/",
+		"/api/thumbnail/",
         // Razor Files
         "/feeds/getuserfeed",
         "/auth/",

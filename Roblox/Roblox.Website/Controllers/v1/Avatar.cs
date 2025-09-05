@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using Newtonsoft.Json.Linq;
+using System.IO;
 using Microsoft.AspNetCore.Mvc;
 using Roblox.Dto.Avatar;
 using Roblox.Exceptions;
@@ -20,8 +22,8 @@ public class AvatarControllerV1 : ControllerBase
     {
         FeatureFlags.FeatureCheck(FeatureFlag.AvatarsEnabled);
     }
-    
-    private void AttemptScheduleRender(bool forceRedraw = false)
+	
+	private void AttemptScheduleRender(bool forceRedraw = false)
     {
         var userId = safeUserSession.userId;
         using (var cache = ServiceProvider.GetOrCreate<AvatarCache>())
@@ -37,10 +39,9 @@ public class AvatarControllerV1 : ControllerBase
             using var cache = ServiceProvider.GetOrCreate<AvatarCache>();
             try
             {
-                using var avatarService = Roblox.Services.ServiceProvider.GetOrCreate<AvatarService>();
                 var assetIds = await cache.GetPendingAssets(userId);
                 var newColors = await cache.GetColors(userId);
-                await avatarService.RedrawAvatar(userId, assetIds, newColors, AvatarType.R6, forceRedraw);
+                await services.avatar.RedrawAvatar(userId, assetIds, newColors, AvatarType.R6, forceRedraw);
             }
             catch (Exception e)
             {
@@ -53,23 +54,145 @@ public class AvatarControllerV1 : ControllerBase
         });
     }
     
-    [HttpPost("avatar/redraw-thumbnail")]
-    public void RequestRedrawAvatar()
-    {
-        FeatureCheck();
-        AttemptScheduleRender(true);
-    }
+	private void AttemptScheduleRenderR15(IEnumerable<long>? assetIds = null, bool forceRedraw = false)
+	{
+		var userId = safeUserSession.userId;
 
-    [HttpPost("avatar/set-wearing-assets")]
-    public async Task SetWornAssets([Required, FromBody] SetWearingAssetsRequest request)
+		using (var cache = ServiceProvider.GetOrCreate<AvatarCache>())
+		{
+			var scheduled = cache.AttemptScheduleRender(userId);
+			if (!scheduled)
+			{
+				Console.WriteLine($"render not scheduled for {userId}");
+				return;
+			}
+		}
+
+		Task.Run(async () =>
+		{
+			using var cache = ServiceProvider.GetOrCreate<AvatarCache>();
+			try
+			{
+				var assetsToUse = assetIds ?? await cache.GetPendingAssets(userId);
+				var colors = await cache.GetColors(userId);
+				// Idk why it breaks when i don't pass assets but i'm too lazy to fix it
+				await services.avatar.RedrawAvatarR15(userId, assetsToUse, colors, forceRedraw);
+				Console.WriteLine($"R15 render completed for {userId}");
+			}
+			catch (Exception e)
+			{
+				Console.WriteLine($"R15 background render failed: {0}\n{1}", e.Message, e.StackTrace);
+			}
+			finally
+			{
+				cache.UnscheduleRender(userId);
+			}
+		});
+	}
+
+/* 	[HttpGet("avatar/r15test")]
+	public async Task<dynamic> r15Test()
+	{
+		try
+		{
+			var userId = userSession.userId;
+
+			using var avatarService = ServiceProvider.GetOrCreate<AvatarService>();
+			await avatarService.UpdateUserAvatarImages(userId, null, null);
+
+			var assets = (await services.avatar.GetWornAssets(userId)).ToList();
+			AttemptScheduleRenderR15(assets, true);
+
+			return new { success = "Hi gu" };
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"[ERROR] r15 render sucks: {ex.Message}\n{ex.StackTrace}");
+			return new { success = false, error = ex.Message };
+		}
+	} */
+    
+    [HttpPost("avatar/redraw-thumbnail")]
+    public async Task RequestRedrawAvatar()
     {
         FeatureCheck();
-        
-        using var cache = ServiceProvider.GetOrCreate<AvatarCache>();
-        await cache.SetPendingAssets(safeUserSession.userId, request.assetIds);
-        
-        AttemptScheduleRender();
+		var userId = userSession.userId;
+
+		var avatarTypeEntry = await services.avatar.GetAvatarType(safeUserSession.userId);
+		// My/Avatar instantly tries to load the avatar, so set it to pending then when it's done it properly loads
+		await services.avatar.UpdateUserAvatarImages(safeUserSession.userId, null, null);
+		var wearingAssets = (await services.avatar.GetWornAssets(safeUserSession.userId)).ToList();
+
+		if (avatarTypeEntry.isR15)
+		{
+			AttemptScheduleRenderR15(wearingAssets, true);
+		}
+		else
+		{
+			AttemptScheduleRender(true);
+		}
     }
+	
+	[HttpPost("avatar/set-wearing-assets")]
+	public async Task SetWornAssets([Required, FromBody] SetWearingAssetsRequest request)
+	{
+		FeatureCheck();
+		var userId = userSession.userId;
+
+		var wornAssets = (await services.avatar.GetWornAssets(userId)).ToList();
+
+		using var cache = ServiceProvider.GetOrCreate<AvatarCache>();
+		await cache.SetPendingAssets(userId, request.assetIds);
+
+		var avatarTypeEntry = await services.avatar.GetAvatarType(userId);
+		
+		// Really stupid hack but rendering animations are very unnecessary
+		var Added = request.assetIds.Except(wornAssets).ToList();
+		var Removed = wornAssets.Except(request.assetIds).ToList();
+
+		var ChangedAssets = Added.Concat(Removed).ToList();
+		if (!ChangedAssets.Any())
+		{
+			return;
+		}
+
+		var ChangedAssetsInfo = await services.assets.MultiGetInfoById(ChangedAssets);
+
+		var Animations = new HashSet<Models.Assets.Type>
+		{
+			Models.Assets.Type.ClimbAnimation,
+			Models.Assets.Type.FallAnimation,
+			// it renders your idle animation now
+			//Models.Assets.Type.IdleAnimation,
+			Models.Assets.Type.JumpAnimation,
+			Models.Assets.Type.RunAnimation,
+			Models.Assets.Type.SwimAnimation,
+			Models.Assets.Type.WalkAnimation,
+			Models.Assets.Type.EmoteAnimation
+		};
+		
+		var avatar = await services.avatar.GetAvatar(userId);
+		var colors = (ColorEntry)avatar;
+		
+		await services.avatar.UpdateUserAvatar(userId, colors, request.assetIds);
+
+		var HasVisualChange = ChangedAssetsInfo.Any(a => !Animations.Contains(a.assetType));
+		if (!HasVisualChange)
+		{
+			return;
+		}
+
+		await services.avatar.UpdateUserAvatarImages(userId, null, null);
+
+		if (avatarTypeEntry.isR15)
+		{
+			AttemptScheduleRenderR15(request.assetIds);
+		}
+		else
+		{
+			AttemptScheduleRender();
+		}
+	}
 
     [HttpPost("avatar/assets/{assetId:long}/wear")]
     public async Task WearAsset([Required] long assetId)
@@ -91,34 +214,66 @@ public class AvatarControllerV1 : ControllerBase
     public async Task SetBodyColors([Required, FromBody] SetColorsRequest colors)
     {
         FeatureCheck();
+		var userId = userSession.userId;
         
         using var cache = ServiceProvider.GetOrCreate<AvatarCache>();
         await cache.SetColors(safeUserSession.userId, colors);
-        
-        AttemptScheduleRender();
+		var avatarTypeEntry = await services.avatar.GetAvatarType(safeUserSession.userId);
+		// My/Avatar instantly tries to load the avatar, so set it to pending then when it's done it properly loads
+		await services.avatar.UpdateUserAvatarImages(safeUserSession.userId, null, null);
+		
+		var wearingAssets = (await services.avatar.GetWornAssets(safeUserSession.userId)).ToList();
+		
+		if (avatarTypeEntry.isR15)
+		{
+			AttemptScheduleRenderR15(wearingAssets);
+		}
+		else
+		{
+			AttemptScheduleRender();
+		}
     }
 
-    [HttpGet("recent-items/{item}/list")]
-    public async Task<dynamic> GetRecentItems()
-    {
-        FeatureCheck();
-        var recent = await services.avatar.GetRecentItems(safeUserSession.userId);
-        var multiGet = await services.assets.MultiGetInfoById(recent);
-        return new
-        {
-            data = multiGet.Select(c => new
-            {
-                id = c.id,
-                name = c.name,
-                type = "Asset",
-                assetType = new
-                {
-                    id = (int) c.assetType,
-                    name = c.assetType,
-                }
-            })
-        };
-    }
+	[HttpGet("recent-items/{item}/list")]
+	public async Task<dynamic> GetRecentItems()
+	{
+		FeatureCheck();
+		var recent = await services.avatar.GetRecentItems(safeUserSession.userId);
+		var multiGet = await services.assets.MultiGetInfoById(recent);
+
+		// Filter out animations because it doesn't have a limit in recent and it breaks
+		var Animations = new[]
+		{
+			Models.Assets.Type.ClimbAnimation,
+			Models.Assets.Type.FallAnimation,
+			Models.Assets.Type.IdleAnimation,
+			Models.Assets.Type.JumpAnimation,
+			Models.Assets.Type.RunAnimation,
+			Models.Assets.Type.SwimAnimation,
+			Models.Assets.Type.WalkAnimation,
+			Models.Assets.Type.EmoteAnimation,
+			Models.Assets.Type.Package,
+		};
+
+		var filtered = multiGet
+			.Where(c => !Animations.Contains(c.assetType))
+			.Select(c => new
+			{
+				id = c.id,
+				name = c.name,
+				type = "Asset",
+				assetType = new
+				{
+					id = (int)c.assetType,
+					name = c.assetType,
+				}
+			});
+
+		return new
+		{
+			data = filtered
+		};
+	}
 
     [HttpGet("users/{userId:long}/outfits")]
     public async Task<dynamic> GetUserOutfits(long userId, int itemsPerPage, int page)
@@ -220,19 +375,21 @@ public class AvatarControllerV1 : ControllerBase
         var assets = await services.avatar.GetWornAssets(userId);
         var existingAvatar = await services.avatar.GetAvatar(userId);
         var multiGetResults = await services.assets.MultiGetInfoById(assets);
+		var avatarTypeEntry = await services.avatar.GetAvatarType(userId);
+		var scalesEntry = await services.avatar.GetAvatarScales(userId);
 
         return new
         {
-            scales = new
-            {
-                height = 1,
-                width = 1,
-                head = 1,
-                depth = 1,
-                proportion = 1,
-                bodyType = 1,
-            },
-            playerAvatarType = AvatarType.R6,
+			scales = new
+			{
+				height = scalesEntry.height / 100.0,
+				width = scalesEntry.width / 100.0,
+				head = scalesEntry.head / 100.0,
+				depth = 1,
+				proportion = scalesEntry.proportion / 100.0,
+				bodyType = scalesEntry.bodyType / 100.0,
+			},
+			playerAvatarType = avatarTypeEntry.isR15 ? "R15" : "R6",
             bodyColors = (ColorEntry)existingAvatar,
             assets = multiGetResults.Select(c =>
             {
@@ -435,9 +592,51 @@ public class AvatarControllerV1 : ControllerBase
         };
     }
 
-    [HttpPost("avatar/set-scales"), HttpPost("avatar/set-player-avatar-type")]
-    public void AvatarNoOp()
-    {
+	[HttpPost("avatar/set-scales"), HttpPost("avatar/set-player-avatar-type")]
+	public async Task<dynamic> AvatarSetScalesAndType()
+	{
+		try
+		{
+			// what did pekora actually return here
+			using var reader = new StreamReader(Request.Body);
+			var body = await reader.ReadToEndAsync();
+			
+			var json = JObject.Parse(body);
+			
+			var userId = userSession.userId;
+			
+			if (Request.Path.Value.Contains("set-player-avatar-type"))
+			{
+				var playerAvatarType = json.Value<int>("playerAvatarType");
+				await services.avatar.UpdateAvatarType(userId, playerAvatarType);
+				await services.avatar.UpdateUserAvatarImages(safeUserSession.userId, null, null);
         
-    }
+				AttemptScheduleRenderR15();
+				
+				return new { success = true };
+			}
+			else if (Request.Path.Value.Contains("set-scales"))
+			{
+				await services.avatar.UpdateScales(
+					userId,
+					json.Value<decimal>("height"),
+					json.Value<decimal>("width"),
+					json.Value<decimal>("head"),
+					json.Value<decimal>("proportion"),
+					json.Value<decimal>("bodyType")
+				);
+				await services.avatar.UpdateUserAvatarImages(safeUserSession.userId, null, null);
+        
+				AttemptScheduleRenderR15();
+				
+				return new { success = true };
+			}
+			
+			return new { success = "No" };
+		}
+		catch (Exception ex)
+		{
+			return new  { success = false, error = ex.Message };
+		}
+	}
 }

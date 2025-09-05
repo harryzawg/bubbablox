@@ -1,0 +1,161 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+	<External>null</External>
+	<External>nil</External>
+	<Item class="Script" referent="RBX0">
+		<Properties>
+			<bool name="Disabled">false</bool>
+			<Content name="LinkedSource"><null></null></Content>
+			<string name="Name">Sound</string>
+			<ProtectedString name="Source">-- util
+
+function waitForChild(parent, childName)
+&#9;local child = parent:findFirstChild(childName)
+&#9;if child then return child end
+&#9;while true do
+&#9;&#9;child = parent.ChildAdded:wait()
+&#9;&#9;if child.Name==childName then return child end
+&#9;end
+end
+
+function newSound(id)
+&#9;local sound = Instance.new(&quot;Sound&quot;)
+&#9;sound.SoundId = id
+&#9;sound.archivable = false
+&#9;sound.Parent = script.Parent.Head
+&#9;return sound
+end
+
+-- declarations
+
+local sFallingDown = newSound(&quot;rbxasset://sounds/splat.wav&quot;)
+local sGettingUp = newSound(&quot;rbxasset://sounds/action_get_up.mp3&quot;)
+local sDied = newSound(&quot;rbxasset://sounds/uuhhh.mp3&quot;) 
+local sFreeFalling = newSound(&quot;rbxasset://sounds/action_falling.mp3&quot;)
+local sJumping = newSound(&quot;rbxasset://sounds/action_jump.mp3&quot;)
+local sLanding = newSound(&quot;rbxasset://sounds/action_jump_land.mp3&quot;)
+local sSplash = newSound(&quot;rbxasset://sounds/impact_water.mp3&quot;)
+local sRunning = newSound(&quot;rbxasset://sounds/action_footsteps_plastic.mp3&quot;)
+sRunning.Looped = true
+local sSwimming = newSound(&quot;rbxasset://sounds/action_swim.mp3&quot;)
+sSwimming.Looped = true
+local sClimbing = newSound(&quot;rbxasset://sounds/action_footsteps_plastic.mp3&quot;)
+sClimbing.Looped = true
+
+local Figure = script.Parent
+local Head = waitForChild(Figure, &quot;Head&quot;)
+local Humanoid = waitForChild(Figure, &quot;Humanoid&quot;)
+
+local prevState = &quot;None&quot;
+
+-- functions
+
+function onDied()
+&#9;stopLoopedSounds()
+&#9;sDied:Play()
+end
+
+local fallCount = 0
+local fallSpeed = 0
+function onStateFall(state, sound)
+&#9;fallCount = fallCount + 1
+&#9;if state then
+&#9;&#9;sound.Volume = 0
+&#9;&#9;sound:Play()
+&#9;&#9;Spawn( function()
+&#9;&#9;&#9;local t = 0
+&#9;&#9;&#9;local thisFall = fallCount
+&#9;&#9;&#9;while t &lt; 1.5 and fallCount == thisFall do
+&#9;&#9;&#9;&#9;local vol = math.max(t - 0.3 , 0)
+&#9;&#9;&#9;&#9;sound.Volume = vol
+&#9;&#9;&#9;&#9;wait(0.1)
+&#9;&#9;&#9;&#9;t = t + 0.1
+&#9;&#9;&#9;end
+&#9;&#9;end)
+&#9;else
+&#9;&#9;sound:Stop()
+&#9;end
+&#9;fallSpeed = math.max(fallSpeed, math.abs(Head.Velocity.Y))
+end
+
+
+function onStateNoStop(state, sound)
+&#9;if state then
+&#9;&#9;sound:Play()
+&#9;end
+end
+
+
+function onRunning(speed)
+&#9;sClimbing:Stop()
+&#9;sSwimming:Stop()
+&#9;if (prevState == &quot;FreeFall&quot; and fallSpeed &gt; 0.1) then
+&#9;&#9;local vol = math.min(1.0, math.max(0.0, (fallSpeed - 50) / 110))
+&#9;&#9;sLanding.Volume = vol
+&#9;&#9;sLanding:Play()
+&#9;&#9;fallSpeed = 0
+&#9;end
+&#9;if speed&gt;0.5 then
+&#9;&#9;sRunning:Play()
+&#9;&#9;sRunning.Pitch = 1.6
+&#9;else
+&#9;&#9;sRunning:Stop()
+&#9;end
+&#9;prevState = &quot;Run&quot;
+end
+
+function onSwimming(speed)
+&#9;if (prevState ~= &quot;Swim&quot; and speed &gt; 0.1) then
+&#9;&#9;local volume = math.min(1.0, speed / 350)
+&#9;&#9;sSplash.Volume = volume
+&#9;&#9;sSplash:Play()
+&#9;&#9;prevState = &quot;Swim&quot;
+&#9;end
+&#9;sClimbing:Stop()
+&#9;sRunning:Stop()
+&#9;sSwimming.Pitch = 1.6
+&#9;sSwimming:Play()
+end
+
+function onClimbing(speed)
+&#9;sRunning:Stop()
+&#9;sSwimming:Stop()&#9;
+&#9;if speed&gt;0.01 then
+&#9;&#9;sClimbing:Play()
+&#9;&#9;sClimbing.Pitch = speed / 5.5
+&#9;else
+&#9;&#9;sClimbing:Stop()
+&#9;end
+&#9;prevState = &quot;Climb&quot;
+end
+-- connect up
+
+function stopLoopedSounds()
+&#9;sRunning:Stop() 
+&#9;sClimbing:Stop()
+&#9;sSwimming:Stop()
+end
+
+Humanoid.Died:connect(onDied)
+Humanoid.Running:connect(onRunning)
+Humanoid.Swimming:connect(onSwimming)
+Humanoid.Climbing:connect(onClimbing)
+Humanoid.Jumping:connect(function(state) onStateNoStop(state, sJumping) prevState = &quot;Jump&quot; end)
+Humanoid.GettingUp:connect(function(state) stopLoopedSounds() onStateNoStop(state, sGettingUp) prevState = &quot;GetUp&quot; end)
+Humanoid.FreeFalling:connect(function(state) stopLoopedSounds() onStateFall(state, sFreeFalling) prevState = &quot;FreeFall&quot; end)
+Humanoid.FallingDown:connect(function(state) stopLoopedSounds() onStateNoStop(state, sFallingDown) prevState = &quot;Falling&quot; end)
+Humanoid.StateChanged:connect(function(old, new) 
+&#9;if not (new.Name == &quot;Dead&quot; or 
+&#9;&#9;&#9;new.Name == &quot;Running&quot; or 
+&#9;&#9;&#9;new.Name == &quot;RunningNoPhysics&quot; or 
+&#9;&#9;&#9;new.Name == &quot;Swimming&quot; or 
+&#9;&#9;&#9;new.Name == &quot;Jumping&quot; or 
+&#9;&#9;&#9;new.Name == &quot;GettingUp&quot; or 
+&#9;&#9;&#9;new.Name == &quot;Freefall&quot; or 
+&#9;&#9;&#9;new.Name == &quot;FallingDown&quot;) then
+&#9;&#9;stopLoopedSounds()
+&#9;end
+end)
+</ProtectedString>
+		</Properties>
+	</Item>
+</roblox>

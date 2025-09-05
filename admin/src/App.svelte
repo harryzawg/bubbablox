@@ -27,6 +27,7 @@
 	import CreateClothing from "./pages/CreateClothing.svelte";
 	import CopyRobloxClothing from "./pages/CopyRobloxClothing.svelte";
 	import CopyRobloxBundle from "./pages/CopyRobloxBundle.svelte";
+	import CopyRobloxAnimBundle from "./pages/CopyRobloxAnimBundle.svelte";
 	import AssetApproval from "./pages/AssetApproval.svelte";
 	import ManageUsernames from "./pages/ManageUsernames.svelte";
 	import * as rank from "./stores/rank";
@@ -156,11 +157,14 @@ import UploadCustomItem from "./pages/UploadCustomItem.svelte";
 		<Route path="/admin/asset/copy">
 			<CopyRobloxClothing />
 		</Route>
-		<Route path="/admin/asset/ugc/copy">
-			<CopyUGC />
-		</Route>
 		<Route path="/admin/bundle/copy">
 			<CopyRobloxBundle />
+		</Route>
+		<Route path="/admin/animation-bundle/copy">
+			<CopyRobloxAnimBundle />
+		</Route>
+		<Route path="/admin/asset/ugc/copy">
+			<CopyUGC />
 		</Route>
 		<Route path="/admin/asset/approval">
 			<AssetApproval />

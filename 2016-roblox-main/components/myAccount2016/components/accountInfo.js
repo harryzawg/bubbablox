@@ -1,8 +1,10 @@
-import React, { useRef } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { createUseStyles } from "react-jss";
 import getFlag from "../../../lib/getFlag";
 import { setUserDescription } from "../../../services/accountInformation";
 import { getTheme, setTheme } from "../../../services/theme";
+import { getAvatarMenu, setAvatarYear } from "../../../services/avatarmenu";
+import { get2020Menu, set2020Menu } from "../../../services/develop";
 import AuthenticationStore from "../../../stores/authentication";
 import useCardStyles from "../../userProfile/styles/card";
 import MyAccountStore from "../stores/myAccountStore"
@@ -27,9 +29,43 @@ const AccountInfo = props => {
   const store = MyAccountStore.useContainer();
   const auth = AuthenticationStore.useContainer();
   const descRef = useRef(null);
+  const [is2020MenuEnabled, set2020MenuEnabled] = useState(false);
+  const [avatarMenu, setAvatarMenu] = useState(getAvatarMenu());
+  const [isLoading, setIsLoading] = useState(false);
 
   const cardStyles = useCardStyles();
   const s = useFormStyles();
+   
+  useEffect(() => {
+	const load2020Menu = async () => {
+		try {
+		  const menuSetting = await get2020Menu();
+		  set2020MenuEnabled(menuSetting.enabled);
+		} catch (error) {
+		  console.error("Failed to get 2020 menu setting:", error);
+		}
+	  };
+	  load2020Menu();
+	  }, []);
+
+  const handle2020MenuChange = async (enabled) => {
+	setIsLoading(true);
+	  try {
+		await set2020Menu({ enabled });
+		set2020MenuEnabled(enabled);
+		window.location.reload();
+	  } catch (error) {
+		console.error("Failed to set 2020 menu setting:", error);
+	  } finally {
+		setIsLoading(false);
+	  }
+	};
+	
+  const handleAvatarMenuChange = (newValue) => {
+    setAvatarYear(newValue);
+    setAvatarMenu(newValue);
+  };
+	
   return <div className='row'>
     <div className='col-12 mt-2'>
       <Subtitle>Account Info</Subtitle>
@@ -109,28 +145,81 @@ const AccountInfo = props => {
         <div className='mt-4 mb-4'>&emsp;</div>
       </div>
     </div>
-    {getFlag('settingsPageThemeSelectorEnabled', false) &&
-      <div className='col-12 mt-2'>
-        <Subtitle>Extensions</Subtitle>
-        <div className={cardStyles.card + ' p-3'}>
-          <div className='row mt-1'>
-            <div className='col pe-0'>
-              <input className={'form-control ' + s.select + ' ' + s.disabled} value='Website Theme' readOnly={true} type='text'></input>
-            </div>
-            <div className='col ps-0 pe-0'>
-              <select className={'form-control ' + s.select} value={getTheme()} onChange={(ev) => {
-                setTheme(ev.currentTarget.value);
-                window.location.reload();
-              }}>
-                <option value='light'>Default</option>
-                <option value='obc2016'>OBC Theme</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
-    }
-  </div>
-}
+	{getFlag("settingsPageThemeSelectorEnabled", false) && (
+	  <div className="col-12 mt-2">
+		<Subtitle>Extensions</Subtitle>
+		<div className={cardStyles.card + " p-3"}>
+		  <div className="row mt-1">
+			<div className="col pe-0">
+			  <input
+				className={"form-control " + s.select + " " + s.disabled}
+				value="Website Theme"
+				readOnly
+				type="text"
+			  />
+			</div>
+			<div className="col ps-0 pe-0">
+			  <select
+				className={"form-control " + s.select}
+				value={getTheme()}
+				onChange={(ev) => {
+				  setTheme(ev.currentTarget.value);
+				  window.location.reload();
+				}}
+			  >
+				<option value="light">Default</option>
+				<option value="obc2016">OBC Theme</option>
+				<option value="dark">Dark</option>
+			  </select>
+			</div>
+		  </div>
+		  <div className="row mt-3">
+			<div className="col pe-0">
+			  <input
+				className={"form-control " + s.select + " " + s.disabled}
+				value="2020+ Beta Menu"
+				readOnly
+				type="text"
+			  />
+			</div>
+			<div className="col ps-0 pe-0">
+			  <select
+				className={"form-control " + s.select}
+				value={is2020MenuEnabled ? "enabled" : "disabled"}
+				onChange={(ev) =>
+				  handle2020MenuChange(ev.currentTarget.value === "enabled")
+				}
+				disabled={isLoading}
+			  >
+				<option value="disabled">Disabled</option>
+				<option value="enabled">Enabled</option>
+			  </select>
+			</div>
+		  </div>
+		  <div className="row mt-3">
+			<div className="col pe-0">
+			  <input
+				className={"form-control " + s.select + " " + s.disabled}
+				value="Avatar Menu"
+				readOnly
+				type="text"
+			  />
+			</div>
+			<div className="col ps-0 pe-0">
+			  <select
+				className={"form-control " + s.select}
+				value={avatarMenu}
+				onChange={(ev) => handleAvatarMenuChange(ev.currentTarget.value)}
+			  >
+				<option value="Legacy">Legacy</option>
+				<option value="R15">R15</option>
+			  </select>
+			</div>
+		  </div>
+		</div>
+	  </div>
+	)}
+  </div>;
+};
 
 export default AccountInfo;

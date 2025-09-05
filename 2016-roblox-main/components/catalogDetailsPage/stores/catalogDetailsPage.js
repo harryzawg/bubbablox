@@ -46,6 +46,7 @@ const subCatIdToName = id => {
     54: 'Swim Animation',
     55: 'Walk Animation',
     56: 'Pose Animation',
+	61: 'Emote Animation',
   }[id];
 }
 

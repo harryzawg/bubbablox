@@ -1,0 +1,74 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+	<Meta name="ExplicitAutoJoints">true</Meta>
+	<External>null</External>
+	<External>nil</External>
+	<Item class="ModuleScript" referent="RBX9FF00FCE2CE845E69822668CAFA53B67">
+		<Properties>
+			<BinaryString name="AttributesSerialize"></BinaryString>
+			<Content name="LinkedSource"><null></null></Content>
+			<string name="Name">MarketPlaceService</string>
+			<string name="OriginalScriptGuid">{ADC97B8F-65F9-4BAE-9C7B-F7FBDE74EE6A}</string>
+			<string name="ScriptGuid">{ADC97B8F-65F9-4BAE-9C7B-F7FBDE74EE6A}</string>
+			<ProtectedString name="Source"><![CDATA[local MarketPlaceService = {}
+
+function MarketPlaceService:PlayerOwnsAsset(xd,xd2)
+	return false;
+end
+
+function MarketPlaceService.ProcessReceipt()
+	return {Receipt={PurchaseId=1,PlayerId=1}}
+end
+
+function MarketPlaceService:GetProductInfo()
+	return {Name="",Description=""}
+end
+
+function MarketPlaceService:UserOwnsGamePassAsync()
+	return false;
+end
+MarketPlaceService.PromptPremiumPurchaseFinished={}
+function MarketPlaceService.PromptPremiumPurchaseFinished:Connect()
+
+end
+
+function MarketPlaceService.PromptPremiumPurchaseFinished:connect()
+
+end
+	
+MarketPlaceService.PromptGamePassPurchaseFinished = {}
+function MarketPlaceService.PromptGamePassPurchaseFinished:Connect()
+	
+end
+	
+function MarketPlaceService.PromptGamePassPurchaseFinished:connect()
+	
+end
+
+MarketPlaceService.PromptPurchaseFinished = {}
+
+function MarketPlaceService.PromptPurchaseFinished:Connect()
+	
+end
+	
+function MarketPlaceService.PromptPurchaseFinished:connect()
+	
+end
+
+MarketPlaceService.PromptProductPurchaseFinished = {}
+
+
+function MarketPlaceService.PromptProductPurchaseFinished:Connect()
+	
+end
+	
+function MarketPlaceService.PromptProductPurchaseFinished:connect()
+	
+end
+
+return MarketPlaceService
+]]></ProtectedString>
+			<int64 name="SourceAssetId">-1</int64>
+			<BinaryString name="Tags"></BinaryString>
+		</Properties>
+	</Item>
+</roblox>

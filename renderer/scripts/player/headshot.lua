@@ -198,18 +198,18 @@ end
 	end
 
 	-- Setup Camera
-	local maxHatOffset = 0.5 -- Maximum amount to move camera upward to accomodate large hats
-    maxDimension = math.min(1, maxDimension / 3) -- Confine maxdimension to specific bounds
+	local maxHatOffset = 0.5
+    maxDimension = math.min(1, maxDimension / 3)
 
     if quadratic then
-        maxDimension = maxDimension * maxDimension -- Zoom out on quadratic interpolation
+        maxDimension = maxDimension * maxDimension
     end
 
-    local viewOffset     = player.Character.Head.CFrame * CFrame.new(cameraOffsetX, cameraOffsetY + maxHatOffset * maxDimension, 0.1) -- View vector offset from head
+    local viewOffset     = player.Character.Head.CFrame * CFrame.new(cameraOffsetX, cameraOffsetY + maxHatOffset * maxDimension, 0.1)
 
     local yAngle = -math.pi / 16
 	
-	local positionOffset = player.Character.Head.CFrame + (CFrame.Angles(0, yAngle, 0).lookVector.unit * 3) -- Position vector offset from head
+	local positionOffset = player.Character.Head.CFrame + (CFrame.Angles(0, yAngle, 0).lookVector.unit * 3)
 
     local camera = Instance.new("Camera", player.Character)-- Instance.new("Camera", player.Character)
     camera.Name = "ThumbnailCamera"

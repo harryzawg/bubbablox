@@ -37,6 +37,13 @@ public class SearchResponse : RobloxCollectionPaginated<CatalogMultiGetEntry>
     public object elasticsearchDebugInfo { get; set; }
 }
 
+public class ItemRestrictions {
+    public long assetId { get; set; }
+    public bool isLimited { get; set; }
+    public bool isLimitedUnique { get; set; }
+    public bool exists { get; set; } = true;
+}
+
 public class MinimalCatalogEntry
 {
     public long assetId { get; set; }

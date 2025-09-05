@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Web;
 using System.Xml.Linq;
+using System.IO.Compression;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Net.Http.Headers;
 using Newtonsoft.Json;
@@ -12,6 +13,7 @@ using System.Diagnostics;
 using Roblox.Dto.Games;
 using Roblox.Dto.Persistence;
 using Roblox.Dto.Users;
+using Roblox.Dto.Friends;
 using MVC = Microsoft.AspNetCore.Mvc;
 using Roblox.Libraries.Assets;
 using Roblox.Libraries.FastFlag;
@@ -19,6 +21,7 @@ using Roblox.Libraries.RobloxApi;
 using Roblox.Logging;
 using Roblox.Services.Exceptions;
 using BadRequestException = Roblox.Exceptions.BadRequestException;
+using Roblox.Models;
 using Roblox.Models.Assets;
 using Roblox.Models.GameServer;
 using Roblox.Models.Users;
@@ -136,9 +139,28 @@ namespace Roblox.Website.Controllers
 			return badheaders.Contains(headername);
 		}
 
-        [HttpGet("asset")]
-        public async Task<MVC.ActionResult> GetAssetById(long id)
+        [HttpGetBypass("v2/asset")]
+        [HttpGetBypass("v1/asset")]
+        [HttpGetBypass("asset")]
+        [HttpPostBypass("v1/asset")]
+        [HttpPostBypass("asset")]
+		public async Task<MVC.ActionResult> GetAssetById(long id, [MVC.FromQuery] string? apiKey = null, [MVC.FromQuery(Name = "assetversionid")] long? assetVersionId = null)
         {
+			if (assetVersionId.HasValue)
+			{
+				id = assetVersionId.Value;
+			}
+			
+			if (apiKey == Configuration.RccAuthorization)
+			{
+				var latestVersionSecret = await services.assets.GetLatestAssetVersion(id);
+				if (latestVersionSecret?.contentUrl == null)
+					throw new RobloxException(400, 0, "Content URL is null");
+
+				var assetContentSecret = await services.assets.GetAssetContent(latestVersionSecret.contentUrl);
+				return File(assetContentSecret, "application/binary");
+			}
+			
             // TODO: This endpoint needs to be updated to return a URL to the asset, not the asset itself.
             // The reason for this is so that cloudflare can cache assets without caching the Response of this endpoint, which might be different depending on the client making the request (e.g. under 18 user, over 18 user, rcc, etc).
             var is18OrOver = false;
@@ -162,24 +184,6 @@ namespace Roblox.Website.Controllers
             var isBotRequest = Request.Headers["bot-auth"].ToString() == Roblox.Configuration.BotAuthorization;
             var isLoggedIn = userSession != null;
             var encryptionEnabled = !isBotRequest; // bots can't handle encryption :(
-#if DEBUG == false
-            var userAgent = Request.Headers["User-Agent"].FirstOrDefault()?.ToLower();
-            var requester = Request.Headers["Requester"].FirstOrDefault()?.ToLower();
-            if (!isBotRequest && !isLoggedIn) {
-                if (userAgent is null) throw new BadRequestException();
-                if (requester is null) throw new BadRequestException();
-                // Client = studio/client, Server = rcc
-                if (requester != "client" && requester != "server")
-                {
-                    throw new BadRequestException();
-                }
-
-                if (!BypassControllerMetadata.allowedUserAgents.Contains(userAgent))
-                {
-                    throw new BadRequestException();
-                }
-            }
-#endif
 
             var isMaterialOrShader = BypassControllerMetadata.materialAndShaderAssetIds.Contains(assetId);
             if (isMaterialOrShader)
@@ -264,6 +268,7 @@ namespace Roblox.Website.Controllers
             
             var latestVersion = await services.assets.GetLatestAssetVersion(assetId);
             Stream? assetContent = null;
+			Console.WriteLine($"[debug] assetId={assetId}, assetType={details.assetType}, moderation={details.moderationStatus}, isRcc={isRcc}, isBot={isBotRequest}, is18={is18OrOver}");
             switch (details.assetType)
             {
 				// Special types
@@ -324,6 +329,7 @@ namespace Roblox.Website.Controllers
                 case Models.Assets.Type.SwimAnimation:
                 case Models.Assets.Type.WalkAnimation:
                 case Models.Assets.Type.PoseAnimation:
+				case Models.Assets.Type.EmoteAnimation:
                 case Models.Assets.Type.SolidModel:
                     if (latestVersion.contentUrl is null)
                         throw new RobloxException(400, 0, "Content URL is null"); // todo: should we log this?
@@ -344,6 +350,7 @@ namespace Roblox.Website.Controllers
                     if (isRcc)
                     {
                         encryptionEnabled = false;
+						ok = true;
                         var placeIdHeader = Request.Headers["roblox-place-id"].ToString();
                         long placeId = 0;
                         if (!string.IsNullOrEmpty(placeIdHeader))
@@ -377,6 +384,7 @@ namespace Roblox.Website.Controllers
                                 ok = true;
                             }
                         }
+						Console.WriteLine($"[debug] default branch, ok={ok}, creatorType={details.creatorType}, creatorTargetId={details.creatorTargetId}");
                     }
                     else
                     {
@@ -1450,6 +1458,8 @@ namespace Roblox.Website.Controllers
 				{
 					throw new RobloxException(404, 0, "Place not found");
 				}
+				
+				long universeId = await services.games.GetUniverseId(placeId);
 
 				string creatorName;
 				if (placeDetails.creatorType == CreatorType.User)
@@ -1477,7 +1487,8 @@ namespace Roblox.Website.Controllers
 						placeId = placeId,
 						creatorId = placeDetails.creatorTargetId,
 						creatorType = placeDetails.creatorType.ToString(),
-						creatorName = creatorName
+						creatorName = creatorName,
+						universeId = universeId
 					}
 				};
 			}
@@ -1579,6 +1590,11 @@ namespace Roblox.Website.Controllers
 		[HttpPostBypass("/game/PlaceLauncherBT.ashx")]
 		public async Task<dynamic> PlaceLaunchBT(long placeId)
 		{	
+			bool is2020Client = Request.Query.ContainsKey("2020");
+			bool is2018Client = Request.Query.ContainsKey("2018");
+			bool is2017Client = Request.Query.ContainsKey("2017");
+			bool is2015Client = Request.Query.ContainsKey("2015");
+
 			if (!await services.games.IsPlayable(placeId))
 			{
 				return BadRequest(new 
@@ -1590,7 +1606,7 @@ namespace Roblox.Website.Controllers
 			}
 			
 			bool bypasscheck = Request.Headers.TryGetValue("btzawgPHPgameserverstart", out var headerValue) 
-									  && headerValue == "startgamesessionforthisplace";
+										  && headerValue == "startgamesessionforthisplace";
 
 			if (userSession == null && !bypasscheck)
 			{
@@ -1608,7 +1624,16 @@ namespace Roblox.Website.Controllers
 				ip = GetIP()
 			};
 
-			var Result = await services.gameServer.GetServerForPlace(details.placeId);
+			var Result = is2020Client ?
+				await services.gameServer.GetServerForPlace2020(placeId) :
+				is2018Client ? 
+				await services.gameServer.GetServerForPlace2018(placeId) :
+				is2017Client ?
+				await services.gameServer.GetServerForPlace2017(placeId) :
+				is2015Client ?
+				await services.gameServer.GetServerForPlace2015(placeId) :
+				await services.gameServer.GetServerForPlace(details.placeId);
+				
 			if (Result.status == JoinStatus.Joining)
 			{
 				await Roblox.Metrics.GameMetrics.ReportGameJoinPlaceLauncherReturned(details.placeId);
@@ -1624,13 +1649,23 @@ namespace Roblox.Website.Controllers
 				}
 
 				var roblosecurity = Request.Cookies[".ROBLOSECURITY"];
+				var joinScriptUrl = $"{Configuration.BaseUrl}/game/join.ashx?placeid={placeId}&ticket={Uri.EscapeDataString(roblosecurity)}";
+				
+				if (is2020Client)
+					joinScriptUrl += "&2020=true";
+				else if (is2018Client)
+					joinScriptUrl += "&2018=true";
+				else if (is2017Client)
+					joinScriptUrl += "&2017=true";
+				else if (is2015Client)
+					joinScriptUrl += "&2015=true";
 				
 				return new
 				{
 					jobId = Result.job,
 					status = (int)Result.status,
 					serverPort = serverPort,
-					joinScriptUrl = $"{Configuration.BaseUrl}/game/join.ashx?placeid={placeId}&ticket={Uri.EscapeDataString(roblosecurity)}",
+					joinScriptUrl = joinScriptUrl,
 					authenticationUrl = Configuration.BaseUrl + "/Login/Negotiate.ashx",
 					authenticationTicket = roblosecurity,
 					message = (string?)null,
@@ -1644,7 +1679,7 @@ namespace Roblox.Website.Controllers
 				message = "Waiting for server",
 			};
 		}
-
+		
 		[HttpGetBypass("/game/Join.ashx")]
 		[HttpPostBypass("/game/Join.ashx")]
 		public async Task<MVC.IActionResult> JoinGame()
@@ -1711,6 +1746,1342 @@ namespace Roblox.Website.Controllers
 				return StatusCode(500, "Could not connect to game server");
 			}
 		}
+		
+		[HttpGetBypass("GetAllowedSecurityKeys")]
+        public MVC.ActionResult<dynamic> AllowedSecurity()
+        {
+            return true;
+        }
+		
+		[HttpGetBypass("GetAllowedMD5Hashes")]
+        public MVC.ActionResult<dynamic> AllowedMD5Hashes()
+        {
+            List<string> allowedList = new List<string>()
+            {
+				"97e93df61c3357531585cebb22d2edff"
+            };
+
+            return new { data = allowedList };
+        }
+
+        [HttpGetBypass("GetAllowedSecurityVersions")]
+        public MVC.ActionResult<dynamic> AllowedSecurityVersions()
+        {
+            List<string> allowedList = new List<string>()
+            {  
+				"0.285.0pcplayer",
+				"0.283.0pcplayer",
+				"0.275.0pcplayer"
+            };
+			
+            return new { data = allowedList };
+        }
+		
+		[HttpGetBypass("/v1/settings/application")]
+		public async Task<MVC.IActionResult> RCCNewApplication(string applicationName)
+		{
+			string json = "PCDesktopClient";
+			if (!string.IsNullOrEmpty(applicationName))
+			{
+				switch (applicationName)
+				{
+					case "PCDesktopClient":
+						json = System.IO.Path.Combine(Configuration.JsonDataDirectory, "PCDesktopClient.json");
+						break;
+
+					case "RCCServiceBubbleRev2021RCCIsSoTuff":
+						json = System.IO.Path.Combine(Configuration.JsonDataDirectory, "RCCService.json");
+						break;
+						
+					case "GD5Z5gO1n0gYX1P":
+						json = System.IO.Path.Combine(Configuration.JsonDataDirectory, "PCDesktopClient.json");
+						break;
+				}
+			}
+
+			if (!System.IO.File.Exists(json))
+			{
+				return NotFound("{}");
+			}
+
+			string content = await System.IO.File.ReadAllTextAsync(json);
+			return Content(content, "text/plain");
+		}
+		
+		public enum ThumbnailType
+        {
+            UserHeadshot = 1,
+            UserAvatar,
+            Asset,
+            PlaceIcon
+        }
+		
+		public class ThumbnailEntry
+		{
+			public long targetId { get; set; }
+			public ThumbnailState state { get; set; }
+			public string? imageUrl { get; set; }
+			public string version { get; set; } = "TN3";
+		}
+		
+		public class BatchRequestEntry
+		{
+			public string requestId { get; set; }
+			public string type { get; set; }
+			public long targetId { get; set; }
+		}
+		
+		public enum ThumbnailState
+		{
+			Error = 1,
+			Completed,
+			InReview,
+			Pending,
+			Blocked,
+			TemporarilyUnavailable
+			// 'Error', 'Completed', 'InReview', 'Pending', 'Blocked', 'TemporarilyUnavailable'],
+		}
+		
+		private async Task<IEnumerable<dynamic>> MultiGetThumbnailsGeneric(
+			List<BatchRequestEntry> entries, 
+			string typeName, 
+			Func<IEnumerable<long>, Task<IEnumerable<Roblox.Dto.Thumbnails.ThumbnailEntry>>> getThumbnailsFunc)
+		{
+			var result = new List<dynamic>();
+			var targetIds = entries.Where(x => x.type == typeName).Select(x => x.targetId).ToList();
+			
+			if (targetIds.Any())
+			{
+				var thumbnails = await getThumbnailsFunc(targetIds);
+				foreach (var thumbnail in thumbnails)
+				{
+					var imageUrl = thumbnail.imageUrl;
+					if (!string.IsNullOrEmpty(imageUrl) && !imageUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+					{
+						imageUrl = Configuration.BaseUrl + imageUrl;
+					}
+					
+					result.Add(new
+					{
+						requestId = entries.First(x => x.targetId == thumbnail.targetId && x.type == typeName).requestId,
+						errorCode = 0,
+						errorMessage = "",
+						targetId = thumbnail.targetId,
+						state = (ThumbnailState)thumbnail.state,
+						imageUrl = imageUrl
+					});
+				}
+			}
+			
+			return result;
+		}
+						
+		private async Task<MVC.RedirectResult> GetThumbnailUrl(long id, ThumbnailType type)
+		{
+			var authUser18Plus = userSession != null && await services.users.Is18Plus(userSession.userId);
+			if (!authUser18Plus)
+			{
+				var avatar18Plus = await services.avatar.IsUserAvatar18Plus(id);
+				if (avatar18Plus)
+					return new MVC.RedirectResult("/img/blocked.png", false);
+			}
+
+			List<ThumbnailEntry> result = null;
+
+			switch (type)
+			{
+				case ThumbnailType.UserHeadshot:
+					var headshots = await services.thumbnails.GetUserHeadshots(new[] { id });
+					result = headshots.Select(x => new ThumbnailEntry
+					{
+						targetId = x.targetId,
+						state = (ThumbnailState)x.state,
+						imageUrl = x.imageUrl,
+						version = x.version
+					}).ToList();
+					break;
+				case ThumbnailType.UserAvatar:
+					var avatars = await services.thumbnails.GetUserThumbnails(new[] { id });
+					result = avatars.Select(x => new ThumbnailEntry
+					{
+						targetId = x.targetId,
+						state = (ThumbnailState)x.state,
+						imageUrl = x.imageUrl,
+						version = x.version
+					}).ToList();
+					break;
+				case ThumbnailType.Asset:
+					var assets = await services.thumbnails.GetAssetThumbnails(new[] { id });
+					result = assets.Select(x => new ThumbnailEntry
+					{
+						targetId = x.targetId,
+						state = (ThumbnailState)x.state,
+						imageUrl = x.imageUrl,
+						version = x.version
+					}).ToList();
+					break;
+				case ThumbnailType.PlaceIcon:
+					long universeId = await services.games.GetUniverseId(id);
+					var gameIcons = await services.thumbnails.GetGameIcons(new[] { universeId });
+					result = gameIcons.Select(x => new ThumbnailEntry
+					{
+						targetId = x.targetId,
+						state = (ThumbnailState)x.state,
+						imageUrl = x.imageUrl,
+						version = x.version
+					}).ToList();
+					break;
+			}
+
+			var imageUrl = result?.FirstOrDefault()?.imageUrl ?? "/img/placeholder.png";
+			return new MVC.RedirectResult(imageUrl, false);
+		}
+
+        //avatar stuff
+        [HttpGetBypass("avatar-thumbnail/image")]
+        public async Task<MVC.RedirectResult> GetAvatarThumbnail(long userId, string? username)
+        {
+            if (username != null)
+            {
+                try
+                {
+                    userId = await services.users.GetUserIdFromUsername(username);
+                }
+                catch (Exception)
+                {
+                    return new MVC.RedirectResult("/img/blocked.png", false);
+                }
+            }
+            return await GetThumbnailUrl(userId, ThumbnailType.UserAvatar);
+        }
+
+        //headshot stuff
+        [HttpGetBypass("headshot-thumbnail/image")]
+        [HttpGetBypass("thumbs/avatar-headshot.ashx")]
+        public async Task<MVC.RedirectResult> GetAvatarHeadShot(long userId)
+        {
+            return await GetThumbnailUrl(userId, ThumbnailType.UserHeadshot);
+        }
+
+        //place icon
+        [HttpGetBypass("Thumbs/PlaceIcon.ashx")]
+        [HttpGetBypass("Thumbs/GameIcon.ashx")]
+        public async Task<MVC.RedirectResult> GetGameIcon(long assetId)
+        {
+            return await GetThumbnailUrl(assetId, ThumbnailType.PlaceIcon);
+        }
+
+        //asset icon stuff
+        [HttpGet("asset-thumbnail/image")]
+        [HttpGetBypass("Game/Tools/ThumbnailAsset.ashx")]
+        public async Task<MVC.RedirectResult> GetAssetThumbnail(long assetId, long? aid)
+        {        
+            if(aid != null)
+                assetId = (long)aid;
+            return await GetThumbnailUrl(assetId, ThumbnailType.Asset);
+        }
+
+        //all json thumbnail apis
+        [HttpGetBypass("avatar-thumbnail/json")]
+        public async Task<dynamic> GetAvatarThumbnailJson([Required] long userId)
+        {
+            var result = (await services.thumbnails.GetUserThumbnails(new[] {userId})).ToList();
+            return new
+            {
+                Url = $"{Configuration.BaseUrl}{result[0].imageUrl}",
+                Final = true,
+                SubstitutionType = 0
+            };
+        }
+
+        [HttpGetBypass("asset-thumbnail/json")]
+        public async Task<dynamic> GetAssetThumbnailJson([Required] long assetId)
+        {
+            var result = (await services.thumbnails.GetAssetThumbnails(new[] {assetId})).ToList();
+            return new
+            {
+                Url = $"{Configuration.BaseUrl}{result[0].imageUrl}",
+                Final = true,
+                SubstitutionType = 0
+            };
+        }     
+
+		[HttpGetBypass("asset-gameicon/multiget")]
+		public async Task<dynamic> GetGameIconMultiGet([MVC.FromQuery] List<long> universeId)
+		{
+			var gameIcons = await services.thumbnails.GetGameIcons(universeId);
+			return gameIcons.Select(x => new
+			{
+				x.targetId,
+				state = (ThumbnailState)x.state,
+				imageUrl = x.imageUrl,
+				version = x.version
+			}).ToList();
+		}
+
+		[HttpGetBypass("v1/games/icons")]
+		public async Task<RobloxCollection<ThumbnailEntry>> GetGameIcons(string universeIds)
+		{
+			var parsed = universeIds.Split(",").Select(long.Parse).Distinct().ToList();
+			if (parsed.Count is > 200 or < 0) throw new BadRequestException();
+			
+			var result = await services.thumbnails.GetGameIcons(parsed);
+			var result2 = result.Select(thumbnail => new ThumbnailEntry
+			{
+				targetId = thumbnail.targetId,
+				imageUrl = Configuration.BaseUrl + thumbnail.imageUrl,
+				state = (ThumbnailState)thumbnail.state,
+			}).ToList();
+			
+			return new()
+			{
+				data = result2,
+			};
+		}
+
+		[HttpGet("v1/users/avatar-headshot")]
+		public async Task<RobloxCollection<ThumbnailEntry>> GetMultiHeadshot(string userIds)
+		{
+			var parsed = userIds.Split(",").Select(long.Parse).Distinct().ToList();
+			if (parsed.Count is > 200 or < 0) throw new BadRequestException();
+			
+			var result = (await services.thumbnails.GetUserHeadshots(parsed)).ToList();
+			var result2 = result.Select(x => new ThumbnailEntry
+			{
+				targetId = x.targetId,
+				state = (ThumbnailState)x.state,
+				imageUrl = x.imageUrl,
+				version = x.version
+			}).ToList();
+			
+			var authUser18Plus = userSession != null && await services.users.Is18Plus(userSession.userId);
+			if (!authUser18Plus)
+			{
+				foreach (var item in result2)
+				{
+					if (item.imageUrl is null) continue;
+
+					var avatar18Plus = await services.avatar.IsUserAvatar18Plus(item.targetId);
+					if (avatar18Plus)
+					{
+						item.state = ThumbnailState.Blocked;
+						item.imageUrl = "/img/blocked.png";
+					}
+					else
+					{
+						item.imageUrl = Configuration.BaseUrl + item.imageUrl;
+					}
+				}
+			}
+			else
+			{
+				foreach (var item in result2)
+				{
+					if (item.imageUrl is null) continue;
+					item.imageUrl = Configuration.BaseUrl + item.imageUrl;
+				}
+			}
+			return new()
+			{
+				data = result2,
+			};
+		}
+		
+		[HttpPostBypass("v1/batch")]
+		public async Task<dynamic> BatchThumbnailsRequest()
+		{
+			try
+			{
+				bool isGzip = Request.Headers["Content-Encoding"].ToString() == "gzip";
+				
+				IEnumerable<BatchRequestEntry> requestEntries;
+				var tasks = new List<Task<IEnumerable<dynamic>>>();
+				
+				if (isGzip)
+				{
+					using (var decompressedStream = new MemoryStream())
+					{
+						using (var requestStream = Request.Body)
+						{
+							using (var gzipStream = new GZipStream(requestStream, CompressionMode.Decompress))
+							{
+								Console.WriteLine($"[BatchThumbnails] decompressing gzip stream");
+								await gzipStream.CopyToAsync(decompressedStream);
+							}
+						}
+						decompressedStream.Seek(0, SeekOrigin.Begin);
+
+						using (var reader = new StreamReader(decompressedStream, Encoding.UTF8))
+						{
+							var json = await reader.ReadToEndAsync();
+							
+							try
+							{
+								requestEntries = JsonConvert.DeserializeObject<IEnumerable<BatchRequestEntry>>(json);
+								Console.WriteLine($"[BatchThumbnails] deserialized {requestEntries?.Count() ?? 0} entrie(s) from gzip");
+							}
+							catch (Exception deserializeEx)
+							{
+								Console.WriteLine($"[BatchThumbnails] JSON deserialization failed: {deserializeEx.Message}");
+								Console.WriteLine($"[BatchThumbnails] StackTrace: {deserializeEx.StackTrace}");
+								throw;
+							}
+						}
+					}
+				}
+				else
+				{
+					using (var reader = new StreamReader(Request.Body, Encoding.UTF8))
+					{
+						var json = await reader.ReadToEndAsync();
+						
+						try
+						{
+							requestEntries = JsonConvert.DeserializeObject<IEnumerable<BatchRequestEntry>>(json);
+							Console.WriteLine($"[BatchThumbnails] deserialized {requestEntries?.Count() ?? 0} JSON entrie(s)");
+						}
+						catch (Exception deserializeEx)
+						{
+							Console.WriteLine($"[BatchThumbnails] JSON deserialization failed: {deserializeEx.Message}");
+							Console.WriteLine($"[BatchThumbnails] StackTrace: {deserializeEx.StackTrace}");
+							throw;
+						}
+					}
+				}
+
+				var thumbs = requestEntries.ToList();
+				Console.WriteLine($"[BatchThumbnails] processing {thumbs.Count} thumbnail request(s)");
+				
+				var taskDefinitions = new List<(string name, Func<IEnumerable<long>, Task<IEnumerable<Roblox.Dto.Thumbnails.ThumbnailEntry>>> func)>
+				{
+					("Avatar", services.thumbnails.GetUserThumbnails),
+					("AvatarThumbnail", services.thumbnails.GetUserThumbnails),
+					("AvatarHeadShot", services.thumbnails.GetUserHeadshots),
+					("GameIcon", services.thumbnails.GetGameIcons),
+					("GameThumbnail", services.thumbnails.GetAssetThumbnails),
+					("Asset", services.thumbnails.GetAssetThumbnails),
+					("AssetThumbnail", services.thumbnails.GetAssetThumbnails),
+					("GroupIcon", services.thumbnails.GetGroupIcons),
+				};
+
+				var taskList = new List<Task<IEnumerable<dynamic>>>();
+				
+				foreach (var (name, func) in taskDefinitions)
+				{
+					var targetIds = thumbs.Where(x => x.type == name).Select(x => x.targetId).ToList();
+					if (targetIds.Any())
+					{
+						Console.WriteLine($"[BatchThumbnails] queueing {name} task with target IDs: {string.Join(", ", targetIds)}");
+						taskList.Add(MultiGetThumbnailsGeneric(thumbs, name, func));
+					}
+					else
+					{
+						//Console.WriteLine($"[BatchThumbnails] no entries for {name}, skipping task");
+					}
+				}
+
+				Console.WriteLine($"[BatchThumbnails] starting {taskList.Count} tasks");
+				var stopwatch = Stopwatch.StartNew();
+				
+				try
+				{
+					var allResults = await Task.WhenAll(taskList);
+					stopwatch.Stop();
+
+					foreach (var result in allResults)
+					{
+						if (result != null)
+						{
+							foreach (var item in result)
+							{
+								Console.WriteLine($"[BatchThumbnails] Result: {JsonConvert.SerializeObject(item)}");
+							}
+						}
+					}
+
+					return new RobloxCollection<dynamic>()
+					{
+						data = allResults.SelectMany(x => x),
+					};
+				}
+				catch (Exception taskEx)
+				{
+					stopwatch.Stop();
+					Console.WriteLine($"[BatchThumbnails] Task execution failed after {stopwatch.ElapsedMilliseconds}ms: {taskEx.Message}");
+					Console.WriteLine($"[BatchThumbnails] StackTrace: {taskEx.StackTrace}");
+					throw;
+				}
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"[BatchThumbnails] Overall processing failed: {ex.Message}");
+				Console.WriteLine($"[BatchThumbnails] StackTrace: {ex.StackTrace}");
+				throw;
+			}
+		}
+
+/*         [HttpPostBypass("v1/batch")]
+        public async Task<dynamic> BatchThumbnailsRequest()
+        {
+            bool isGzip = Request.Headers["Content-Encoding"].ToString() == "gzip";
+            IEnumerable<BatchRequestEntry> requestEntries;
+            var tasks = new List<Task<IEnumerable<dynamic>>>();
+            Console.WriteLine(isGzip);
+            if (isGzip)
+            {
+                using (var decompressedStream = new MemoryStream())
+                {
+                    using (var requestStream = Request.Body)
+                    {
+                        using (var gzipStream = new GZipStream(requestStream, CompressionMode.Decompress))
+                        {
+                            await gzipStream.CopyToAsync(decompressedStream);
+                        }
+                    }
+                    decompressedStream.Seek(0, SeekOrigin.Begin);
+
+                    using (var reader = new StreamReader(decompressedStream, Encoding.UTF8))
+                    {
+                        var json = await reader.ReadToEndAsync();
+                        Console.WriteLine(json);
+                        requestEntries = JsonConvert.DeserializeObject<IEnumerable<BatchRequestEntry>>(json);
+                    }
+                }
+            }
+            else
+            {
+                using (var reader = new StreamReader(Request.Body, Encoding.UTF8))
+                {
+                    var json = await reader.ReadToEndAsync();
+                    Console.WriteLine(json);
+                    requestEntries = JsonConvert.DeserializeObject<IEnumerable<BatchRequestEntry>>(json);
+                }
+            }
+
+            var thumbs = requestEntries.ToList();
+            var allResults = await Task.WhenAll(new List<Task<IEnumerable<dynamic>>>()
+            {
+                MultiGetThumbnailsGeneric(thumbs, "Avatar", services.thumbnails.GetUserThumbnails),
+                MultiGetThumbnailsGeneric(thumbs, "AvatarThumbnail", services.thumbnails.GetUserThumbnails),
+                MultiGetThumbnailsGeneric(thumbs, "AvatarHeadShot", services.thumbnails.GetUserHeadshots),
+                MultiGetThumbnailsGeneric(thumbs, "GameIcon", services.thumbnails.GetGameIcons),
+                MultiGetThumbnailsGeneric(thumbs, "GameThumbnail", services.thumbnails.GetAssetThumbnails),
+                MultiGetThumbnailsGeneric(thumbs, "Asset", services.thumbnails.GetAssetThumbnails),
+                MultiGetThumbnailsGeneric(thumbs, "AssetThumbnail", services.thumbnails.GetAssetThumbnails),
+                MultiGetThumbnailsGeneric(thumbs, "GroupIcon", services.thumbnails.GetGroupIcons),
+            });
+            return new RobloxCollection<dynamic>()
+            {
+                data = allResults.SelectMany(x => x),
+            };
+        } */
+		
+		[HttpPostBypass("/api/thumbnail")]
+		public async Task ThumbnailEndpoint()
+		{
+			try
+			{
+				string jsonBody;
+				using (var reader = new StreamReader(Request.Body))
+				{
+					jsonBody = await reader.ReadToEndAsync();
+				}
+
+				var headers = new Dictionary<string, string>();
+				foreach (var key in Request.Headers.Keys)
+				{
+					headers[key] = Request.Headers[key];
+				}
+
+				var queryParams = new Dictionary<string, string>();
+				foreach (var key in Request.Query.Keys)
+				{
+					queryParams[key] = Request.Query[key];
+				}
+
+				Console.WriteLine($"Received thumbnail data:");
+				Console.WriteLine($"Headers: {System.Text.Json.JsonSerializer.Serialize(headers)}");
+				Console.WriteLine($"Query Params: {System.Text.Json.JsonSerializer.Serialize(queryParams)}");
+				Console.WriteLine($"Body: {jsonBody}");
+
+				Response.StatusCode = 200;
+				await Response.WriteAsync("Thumbnail received successfully");
+			}
+			catch (Exception ex)
+			{
+				Response.StatusCode = 500;
+				await Response.WriteAsync($"Error: {ex.Message}");
+			}
+		}
+		
+		[HttpPostBypass("moderation/filtertext")]
+        public dynamic GetModerationText()
+        {
+            var text = services.filter.FilterText(HttpContext.Request.Form["text"].ToString());
+            return new
+            {
+                success = true,
+                data = new 
+                {
+                    white = text,
+                    black = text
+                }
+            };
+        }
+		
+        [HttpPostBypass("moderation/v2/filtertext")]
+        public dynamic GetModerationTextV2()
+        {
+            var text = services.filter.FilterText(HttpContext.Request.Form["text"].ToString());
+            var json = new
+            {
+                success = true,
+                data = new
+                {
+                    AgeUnder13 = text,
+                    Age13OrOver = text,
+                }
+            };
+            string jsonString = JsonConvert.SerializeObject(json);
+            return Content(jsonString, "application/json");
+        }
+		
+		[HttpGetBypass("/Game/ClientPresence.ashx")]
+        public async Task ClientPresenceAshx(string action, long placeId, long userId, bool IsTeleport)
+        {
+            if(action == "disconnect"){
+                string JobId = await services.gameServer.GetJobIdByUserId(userId);
+                if(JobId == null)
+                {
+                    return;
+                }
+                await services.gameServer.OnPlayerLeave(userId, placeId, JobId);
+            }
+        }
+		
+		[HttpGetBypass("v1.1/game-start-info")]
+        public dynamic GameStartInfo(long universeId)
+        {
+            return new
+            {
+                gameAvatarType = "PlayerChoice",
+                allowCustomAnimations = "True",
+                universeAvatarCollisionType = "OuterBox",
+                universeAvatarBodyType = "Standard",
+                jointPositioningType = "ArtistIntent",
+                message = "",
+                universeAvatarMinScales = new
+                {
+                    height = 0.9,
+                    width = 0.7,
+                    head = 0.95,
+                    depth = 0.0,
+                    proportion = 0.0,
+                    bodyType = 0.0
+                },
+                universeAvatarMaxScales = new
+                {
+                    height = 1.05,
+                    width = 1.0,
+                    head = 1.0,
+                    depth = 0.0,
+                    proportion = 1.0,
+                    bodyType = 1.0
+                },
+                universeAvatarAssetOverrides = new List<object>(),
+                moderationStatus = ""
+            };
+        }
+		
+		[HttpGetBypass("v1/avatar-fetch")]
+        [HttpGetBypass("/v1.1/avatar-fetch")]
+        public async Task<MVC.IActionResult> CharacterFetch(long userId, long? placeId = null)
+        {
+            List<long> accessoryVersionIds = new List<long>();
+            List<long> equippedGearVersionIds = new List<long>();
+            string userAgent = Request.Headers["User-Agent"].ToString();
+            var wornAssets = await services.avatar.GetWornAssets(userId);
+            var avatar = await services.avatar.GetAvatar(userId);
+			var avatarTypeEntry = await services.avatar.GetAvatarType(userId);
+			var scalesEntry = await services.avatar.GetAvatarScales(userId);
+			bool gearsEnabled = false;
+			List<dynamic> emotes = new List<dynamic>();
+
+            var assetInfo = await services.assets.MultiGetInfoById(wornAssets);
+			if (FeatureFlags.IsEnabled(FeatureFlag.GearsEnabled))
+			{
+				if (placeId.HasValue)
+				{
+					gearsEnabled = await services.games.AreGearsEnabled(placeId.Value);
+				}
+			}
+            dynamic bodyColors = new
+            {
+				// 2020+
+                headColorId = avatar.headColorId,
+                leftArmColorId = avatar.leftArmColorId,
+                leftLegColorId = avatar.leftLegColorId,
+                rightArmColorId = avatar.rightArmColorId,
+                rightLegColorId = avatar.rightLegColorId,
+                torsoColorId = avatar.torsoColorId,
+				// 2018
+                HeadColor = avatar.headColorId,
+                LeftArmColor = avatar.leftArmColorId,
+                LeftLegColor = avatar.leftLegColorId,
+                RightArmColor = avatar.rightArmColorId,
+                RightLegColor = avatar.rightLegColorId,
+                TorsoColor = avatar.torsoColorId
+            };
+			dynamic scales = new { 
+				height = scalesEntry.height / 100.0,
+				Height = scalesEntry.height / 100.0,
+				width = scalesEntry.width / 100.0,
+				Width = scalesEntry.width / 100.0,
+				head = scalesEntry.head / 100.0,
+				Head = scalesEntry.head / 100.0,
+				depth = 1,
+				Depth = 1,
+				proportion = scalesEntry.proportion / 100.0,
+				Proportion = scalesEntry.proportion / 100.0,
+				bodyType = scalesEntry.bodyType / 100.0,
+				BodyType = scalesEntry.bodyType / 100.0
+			};
+			string AvatarType = avatarTypeEntry.isR15 ? "R15" : "R6";
+			Dictionary<string, long> animationAssetIds = new Dictionary<string, long>();
+			Dictionary<string, long> animations = new Dictionary<string, long>();
+			int emotePos = 1;
+
+			foreach (long assetId in wornAssets)
+			{
+				var catinfo = await services.assets.GetAssetCatalogInfo(assetId);
+
+				if (catinfo.assetType == Type.Gear)
+				{
+					if (gearsEnabled)
+					{
+						equippedGearVersionIds.Add(catinfo.id);
+					}
+				}
+				else
+				{
+					accessoryVersionIds.Add(catinfo.id);
+				}
+
+				switch (catinfo.assetType)
+				{
+					case Type.ClimbAnimation:
+						animationAssetIds["climb"] = assetId;
+						animations["climb"] = assetId;
+						break;
+					case Type.FallAnimation:
+						animationAssetIds["fall"] = assetId;
+						animations["fall"] = assetId;
+						break;
+					case Type.IdleAnimation:
+						animationAssetIds["idle"] = assetId;
+						// Only default R15 Idle works cause all the other ones just make the player have parkinsons
+						//animations["idle"] = assetId;
+						break;
+					case Type.JumpAnimation:
+						animationAssetIds["jump"] = assetId;
+						animations["jump"] = assetId;
+						break;
+					case Type.RunAnimation:
+						animationAssetIds["run"] = assetId;
+						animations["run"] = assetId;
+						break;
+					case Type.SwimAnimation:
+						animationAssetIds["swim"] = assetId;
+						animations["swim"] = assetId;
+						break;
+					case Type.WalkAnimation:
+						animationAssetIds["walk"] = assetId;
+						animations["walk"] = assetId;
+						break;
+					case Type.EmoteAnimation:
+						emotes.Add(new
+						{
+							assetId = assetId,
+							assetName = catinfo.name,
+							position = emotePos++
+						});
+                break;
+				}
+			}
+/* 			if (userAgent != "Roblox/Win2020")
+			{
+				equippedGearVersionIds = new List<long>();
+			} */
+			var result = new
+			{
+				resolvedAvatarType = AvatarType,
+				playerAvatarType = AvatarType,
+				accessoryVersionIds,
+				equippedGearVersionIds,
+				assetAndAssetTypeIds = assetInfo.Select(c => new
+				{
+					assetId = c.id,
+					assetTypeId = (int)c.assetType,
+				}),
+				backpackGearVersionIds = equippedGearVersionIds,
+				animationAssetIds = animationAssetIds,
+				animations = animations,
+				scales,
+				bodyColorsUrl = $"{Configuration.BaseUrl}/Asset/BodyColors.ashx?userId={userId}",
+				bodyColors,
+				emotes
+			};
+
+			string jsonString = JsonConvert.SerializeObject(result);
+			return Content(jsonString, "application/json");
+		}
+		
+		[HttpGetBypass("v2/users/{userId:long}/groups/roles")]
+        public async Task<RobloxCollection<dynamic>> GetUserGroupRoles(long userId)
+        {
+            var roles = await services.groups.GetAllRolesForUser(userId);
+            var result = new List<dynamic>();
+            foreach (var role in roles)
+            {
+                var groupDetails = await services.groups.GetGroupById(role.groupId);
+                result.Add(new
+                {
+                    group = new
+                    {
+                        id = groupDetails.id,
+                        name = groupDetails.name,
+                        memberCount = groupDetails.memberCount,
+                    },
+                    role = role,
+                });
+            }
+            if (await StaffFilter.IsStaff(userId))
+            {
+                result.Add(new
+                {
+                    group = new
+                    {
+                        id = 1200769,
+                        name = "Administrator",
+                        memberCount = 100,
+                    },
+                    role = new
+                    {
+                        id = 1,
+                        name = "Admin",
+                        rank = 100
+                    }
+                });
+            }
+            return new()
+            {
+                data = result,
+            };
+        }
+		
+	    [HttpGetBypass("universal-app-configuration/v1/behaviors/app-patch/content")]
+        public dynamic AppPatch()
+        {
+            List<long> CanaryUserIds = new List<long>();
+            return new 
+            {
+                SchemeVersion = "1",
+                CanaryUserIds,
+                CanaryPercentage = 0,
+            };
+        }
+		
+		[HttpGetBypass("v1/users/{userId}/friends/statuses")]
+        public async Task<dynamic> MultiGetFriendshipStatus(string userIds)
+        {
+            dynamic ids = null; 
+            try
+            {
+                ids = userIds.Split(",").Select(long.Parse).Distinct().ToList();
+            }
+            catch (Exception ex)
+            {
+                return BadRequest();
+            }
+
+            if (ids.Count == 0 || ids.Count > 100)
+                throw new BadRequestException();
+
+            var data = await services.friends.MultiGetFriendshipStatus(safeUserSession.userId, ids);
+            return new
+            {
+                data = data,
+            };
+        }
+
+        [HttpGetBypass("v1/users/{userId:long}/friends")]
+        public async Task<RobloxCollection<FriendEntry>> GetUserFriends(long userId)
+        {
+            var result = await services.friends.GetFriends(userId);
+            return new RobloxCollection<FriendEntry>()
+            {
+                data = result,
+            };
+        }
+
+        [HttpGetBypass("v1/user/friend-requests/count")]
+        public async Task<dynamic> GetFriendRequestCount()
+        {
+            var result = await services.friends.GetFriendRequestCount(safeUserSession.userId);
+            return new
+            {
+                count = result,
+            };
+        }
+
+        [HttpGetBypass("v1/users/{userId}/friends/count")]
+        public async Task<dynamic> GetFriendCount(long userId)
+        {
+            var result = await services.friends.CountFriends((long)userId);
+            return new
+            {
+                count = result,
+            };
+        }
+        [HttpGetBypass("v1/metadata")]
+        public dynamic GetMetadata()
+        {
+            return new
+            {
+                isNearbyUpsellEnabled = false,
+                isFriendsUserDataStoreCacheEnabled = false,
+                userName = safeUserSession.username,
+                displayName = safeUserSession.username,
+            };
+        }
+
+        [HttpGetBypass("v1/my/friends/requests")]
+        public async Task<RobloxCollectionPaginated<FriendEntry>> GetMyFriendRequests(string? cursor, int limit)
+        {
+            if (limit is <= 0 or > 100) limit = 10;
+
+            return await services.friends.GetFriendRequests(safeUserSession.userId, cursor, limit);
+        }
+
+        [HttpPostBypass("v1/users/{userIdToRequest}/request-friendship")]
+        public async Task<dynamic> RequestFriendshipv1(long userIdToRequest)
+        {
+            FeatureFlags.FeatureCheck(FeatureFlag.FriendingEnabled);
+            if (safeUserSession.userId == userIdToRequest)
+                throw new BadRequestException(7, "The user cannot be friends with itself");
+            await services.friends.RequestFriendship(safeUserSession.userId, userIdToRequest);
+            
+            return new
+            {
+                success = true,
+                isCaptchaRequired = false,
+            };
+        }
+
+        [HttpPostBypass("v1/users/{userIdToAccept:long}/accept-friend-request")]
+        public async Task AcceptFriendRequest(long userIdToAccept)
+        {
+            FeatureFlags.FeatureCheck(FeatureFlag.FriendingEnabled);
+            if (safeUserSession.userId == userIdToAccept)
+                throw new BadRequestException(7, "The user cannot be friends with itself");
+
+            await services.friends.AcceptFriendRequest(safeUserSession.userId, userIdToAccept);
+        }
+
+        [HttpPostBypass("v1/users/{userIdToDecline:long}/decline-friend-request")]
+        public async Task DeclineFriendRequestV1(long userIdToDecline)
+        {
+            FeatureFlags.FeatureCheck(FeatureFlag.FriendingEnabled);
+            await services.friends.DeclineFriendRequest(safeUserSession.userId, userIdToDecline);
+        }
+
+        [HttpPostBypass("v1/users/{userIdToRemove:long}/unfriend")]
+        public async Task UnfriendUser(long userIdToRemove)
+        {
+            FeatureFlags.FeatureCheck(FeatureFlag.FriendingEnabled);
+            await services.friends.DeleteFriend(safeUserSession.userId, userIdToRemove);
+        }
+
+        [HttpPostBypass("v1/users/{userIdToFollow:long}/follow")]
+        public async Task<dynamic> FollowUser(long userIdToFollow)
+        {
+            FeatureFlags.FeatureCheck(FeatureFlag.FollowingEnabled);
+            if (userIdToFollow == safeUserSession.userId)
+                throw new BadRequestException();
+            await services.friends.FollowerUser(safeUserSession.userId, userIdToFollow);
+
+            return new
+            {
+                success = true,
+                isCaptchaRequired = false,
+            };
+        }
+
+        [HttpPostBypass("v1/users/{userIdToUnfollow:long}/unfollow")]
+        public async Task DeleteFollowingV1(long userIdToUnfollow)
+        {
+            FeatureFlags.FeatureCheck(FeatureFlag.FollowingEnabled);
+            await services.friends.DeleteFollowing(safeUserSession.userId, userIdToUnfollow);
+        }
+
+        [HttpGetBypass("v1/users/{userId:long}/followers/count")]
+        public async Task<dynamic> CountFollowers(long userId)
+        {
+            var result = await services.friends.CountFollowers(userId);
+            return new
+            {
+                count = result,
+            };
+        }
+        
+        [HttpGetBypass("v1/users/{userId:long}/followings/count")]
+        public async Task<dynamic> CountFollowings(long userId)
+        {
+            var result = await services.friends.CountFollowings(userId);
+            return new
+            {
+                count = result,
+            };
+        }
+
+        [HttpGetBypass("v1/users/{userId:long}/followers")]
+        public async Task<RobloxCollectionPaginated<FriendEntry>> GetFollowers(long userId, int limit, string? cursor)
+        {
+            if (limit is > 100 or < 1) limit = 10;
+            return await services.friends.GetFollowers(userId, cursor, limit);
+        }
+
+        [HttpGetBypass("v1/users/{userId:long}/followings")]
+        public async Task<RobloxCollectionPaginated<FriendEntry>> GetFollowings(long userId, int limit, string? cursor)
+        {
+            if (limit is > 100 or < 1) limit = 10;
+            return await services.friends.GetFollowings(userId, cursor, limit);
+        }
+
+        [HttpPostBypass("v1/user/following-exists")]
+        public async Task<dynamic> FollowingExists([Required,MVC.FromBody] FollowingExistsRequest request)
+        {
+            var result = new List<dynamic>();
+
+            foreach (var userId in request.targetUserIds)
+            {
+                if (userSession is null)
+                {
+                    result.Add(new
+                    {
+                        isFollowing = false,
+                        userId,
+                    });
+                    continue;
+                }
+                
+                var isFollowing = await services.friends.IsOneFollowingTwo(userSession.userId, userId);
+                result.Add(new
+                {
+                    isFollowing,
+                    userId,
+                });
+            }
+            
+            return new
+            {
+                followings = result,
+            };
+        }
+
+        [HttpGetBypass("universal-app-configuration/v1/behaviors/app-policy/content")]
+        public dynamic AppPolicy()
+        {
+            string policyContent = System.IO.File.ReadAllText(Configuration.JsonDataDirectory + "AppPolicy.json");
+            dynamic? policyJson = JsonConvert.DeserializeObject<ExpandoObject>(policyContent);
+            return policyJson ?? "";
+        }
+		
+	   [HttpGetBypass("v1/user/{userId:long}/is-admin-developer-console-enabled")]
+        public async Task<dynamic> NewCanManage(long userId)
+        {
+            long placeId = long.Parse(Request.Headers["roblox-place-id"].ToString());
+            bool canManagePlace = await services.assets.CanUserModifyItem(placeId, userId);
+            bool isOwner =  StaffFilter.IsOwner(userId);
+            return new 
+            {
+                isAdminDeveloperConsoleEnabled = (canManagePlace || isOwner)
+            };
+        }
+        [HttpGetBypass("universes/get-universe-places")]
+        public async Task<dynamic> GetPlaces(long universeId)
+        {
+            var place = await services.games.GetRootPlaceId(universeId);
+            var placeInfo = await services.assets.GetAssetCatalogInfo(place);
+            return new
+            {
+                FinalPage = true,
+                RootPlace = place,
+                Places = new
+                {
+                    PlaceId = place,
+                    Name = placeInfo.name,
+                },
+                PageSize = 50
+            };
+        }
+		
+		[HttpGetBypass("/currency/balance")]
+        public async Task<dynamic> GetBalance()
+        {
+            return await services.economy.GetBalance(CreatorType.User, safeUserSession.userId);
+        }
+
+        [HttpGetBypass("/ownership/hasasset")]
+        public async Task<string> DoesOwnAsset(long userId, long assetId)
+        {
+            return (await services.users.GetUserAssets(userId, assetId)).Any() ? "true" : "false";
+        }
+		
+
+        [HttpGetBypass("user/follow")]
+        [HttpPostBypass("user/follow")]
+        public async Task<dynamic> FollowUserV1(long followedUserId)
+        {
+            FeatureFlags.FeatureCheck(FeatureFlag.FollowingEnabled);
+            if (followedUserId == safeUserSession.userId)
+                throw new BadRequestException();
+            await services.friends.FollowerUser(safeUserSession.userId, followedUserId);
+
+            return new
+            {
+                success = true,
+                isCaptchaRequired = false,
+            };
+        }
+		
+        [HttpGetBypass("users/get-by-username")]
+        public async Task<dynamic> GetByUsername(string username)
+        {
+            var userInfo = await services.users.GetUserByName(username);
+            var onlineStatus = (await services.users.MultiGetPresence(new[] {userInfo.userId})).First();
+            return new 
+            {
+                Id = userInfo.userId,
+                Username = username,
+                AvatarUri = "null",
+                AvatarFinal = false,
+                IsOnline = onlineStatus.userPresenceType,
+            };
+        }
+		
+        [HttpGetBypass("users/account-info")]
+        [HttpPostBypass("users/account-info")]
+        public async Task<dynamic> accountInfo()
+        {
+
+            var roles = new string[] { };
+            if (userSession == null)
+            {
+                HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return new
+                {
+                    success = false,
+                    message = "Unauthorized"
+                };
+            }
+            var userBalance = await services.economy.GetUserBalance(userSession.userId);
+            var jsonData = new
+            {
+                UserId =  userSession.userId,
+                Username = userSession.username,
+                DisplayName = userSession.username,
+                HasPasswordSet = true,
+                Email = "Higu@higu.ca",
+                MembershipType = 3,
+                RobuxBalance = userBalance.robux,
+                AgeBracket = 0,
+                Roles = roles,
+                EmailNotificationEnabled = false,
+                PasswordNotifcationEnabled = false,
+            };
+            string jsonString = JsonConvert.SerializeObject(jsonData);
+            return Content(jsonString, "application/json");
+        }
+		
+        [HttpPostBypass("user/following-exists")]
+        [HttpGetBypass("user/following-exists")]
+        public async Task<dynamic> FollowingExists(long userId, long followerUserId)
+        {
+            var result = new List<dynamic>();
+                if (userSession is null)
+                {
+                    result.Add(new
+                    {
+                        isFollowing = false,
+                        userId,
+                    });
+                }
+                
+                var isFollowing = await services.friends.IsOneFollowingTwo(safeUserSession.userId, followerUserId);
+                result.Add(new
+                {
+                    isFollowing,
+                    userId,
+                });
+            
+            return new
+            {
+                followings = result,
+            };
+        }
+		
+        [HttpPostBypass("user/unfollow")]
+        public async Task DeleteFollowing(long followedUserId)
+        {
+            FeatureFlags.FeatureCheck(FeatureFlag.FollowingEnabled);
+            await services.friends.DeleteFollowing(safeUserSession.userId, followedUserId);
+        }
+		
+        [HttpPostBypass("user/decline-friend-request")]
+        public async Task DeclineFriendRequest(long requesterUserId)
+        {
+            FeatureFlags.FeatureCheck(FeatureFlag.FriendingEnabled);
+            await services.friends.DeclineFriendRequest(safeUserSession.userId, requesterUserId);
+        }
+		
+        [HttpGetBypass("user/request-friendship")]
+        [HttpPostBypass("user/request-friendship")]
+        public async Task<dynamic> RequestFriendship(long recipientUserId)
+        {
+            FeatureFlags.FeatureCheck(FeatureFlag.FriendingEnabled);
+            if (safeUserSession.userId == recipientUserId)
+                throw new BadRequestException(7, "The user cannot be friends with itself");
+            await services.friends.RequestFriendship(safeUserSession.userId, recipientUserId);
+            
+            return new
+            {
+                success = true,
+                isCaptchaRequired = false,
+            };
+        }
+		
+        [HttpGetBypass("user/get-friendship-count")]
+        public async Task<dynamic> GetFriendsAmount(long? userId)
+        {
+            if(userId == null)
+            {
+                userId = safeUserSession.userId;
+            }
+            int amountFriends = await services.friends.CountFriends((long)userId);
+            return new 
+            {
+                success = true,
+                message = "Success",
+                count = amountFriends
+            };
+        }
+		
+        [HttpPostBypass("game/load-place-info")]
+        public async Task<dynamic> LoadPlaceInfo()
+        {
+            var placeId = Request.Headers["roblox-place-id"];
+            long.TryParse(placeId, out long assetId);
+            var details = await services.assets.GetAssetCatalogInfo(assetId);
+            var jsonData = new
+            {
+                CreatorId =  details.creatorTargetId,
+                CreatorType = "User",
+                PlaceVersion = details.id,
+                GameId = assetId,
+                IsRobloxPlace = details.creatorTargetId == 1
+            };
+            string jsonString = JsonConvert.SerializeObject(jsonData);
+            return Content(jsonString, "application/json");
+        }
+		
+		[HttpPostBypass("/v1.0/SequenceStatistics/AddToSequence")]
+        [HttpPostBypass("/v1.1/Counters/Increment")]
+        [HttpPostBypass("/v1.0/SequenceStatistics/BatchAddToSequencesV2")]
+        [HttpPostBypass("v1.0/MultiIncrement")]
+        [HttpPostBypass("/game/report-stats")]
+        [HttpGetBypass("usercheck/show-tos")]
+        [HttpGetBypass("/v1.1/Counters/Increment")]
+        [HttpGetBypass("notifications/signalr/negotiate")]
+        [HttpGetBypass("notifications/negotiate")]
+        [HttpPostBypass("v1.1/Counters/BatchIncrement")]
+        [HttpGetBypass("v1.1/Counters/BatchIncrement")]
+        public MVC.OkResult TelemetryFunctions()
+        {
+            return Ok();
+        }
+		
+        [HttpPostBypass("userblock/getblockedusers")]
+        [HttpGetBypass("userblock/getblockedusers")]
+        public MVC.OkResult GetBlocked()
+        {
+            return Ok();
+        }
+		
+		public class BatchAssetRequest
+		{
+			public long assetId { get; set; }
+			public string assetType { get; set; }
+			public string requestId { get; set; }
+		}
+		
+		[HttpPostBypass("asset/batch")]
+        [HttpPostBypass("v1/assets/batch")]
+        public async Task<MVC.IActionResult> AssetBatch()
+        {
+            List<BatchAssetRequest> requestData;
+            bool isGzip = Request.Headers["Content-Encoding"].ToString() == "gzip";
+            
+            if (isGzip)
+            {
+                using (var decompressedStream = new MemoryStream())
+                {
+                    using (var requestStream = Request.Body)
+                    {
+                        using (var gzipStream = new GZipStream(requestStream, CompressionMode.Decompress))
+                        {
+                            await gzipStream.CopyToAsync(decompressedStream);
+                        }
+                    }
+                    decompressedStream.Seek(0, SeekOrigin.Begin);
+
+                    using (var reader = new StreamReader(decompressedStream, Encoding.UTF8))
+                    {
+                        var json = await reader.ReadToEndAsync();
+                        Console.WriteLine(json);
+                        requestData = JsonSerializer.Deserialize<List<BatchAssetRequest>>(json);
+                    }
+                }
+            }
+            else
+            {
+                using (var reader = new StreamReader(Request.Body, Encoding.UTF8))
+                {
+                    var json = await reader.ReadToEndAsync();
+                    Console.WriteLine(json);
+                    requestData = JsonSerializer.Deserialize<List<BatchAssetRequest>>(json);
+                }
+            }
+            if (requestData == null)
+            {
+                throw new BadRequestException();
+            }
+            var assetReturnInfo = new List<object>();
+            foreach (var request in requestData)
+            {
+                Console.WriteLine(request.assetId);
+                assetReturnInfo.Add(new
+                {
+                    Location = $"{Configuration.BaseUrl}/v1/asset?id={request.assetId}",
+                    RequestId = request.requestId,
+                    IsHashDynamic = true,
+                    IsCopyrightProtected = true, 
+                    IsArchived = false,
+                });
+            }
+
+            return Content(JsonSerializer.Serialize(assetReturnInfo), "application/json");
+        }
 		
 		[HttpGetBypass("/universes/validate-place-join")]
 		public async Task<string> ValidatePlaceJoin()
@@ -1805,28 +3176,6 @@ namespace Roblox.Website.Controllers
 			}
 			return $"{Configuration.BaseUrl}/Asset/BodyColors.ashx?userId={userId};{string.Join(";", filtered.Select(c => Configuration.BaseUrl + "/Asset/?id=" + c))}";
 		}
-		    
-        [HttpGet("marketplace/productinfo")]
-        public async Task<dynamic> GetProductInfo(long assetId)
-        {
-            var details = await services.assets.GetAssetCatalogInfo(assetId);
-            return new
-            {
-                TargetId = details.id,
-                AssetId = details.id,
-                ProductId = details.id,
-                Name = details.name,
-                Description = details.description,
-                AssetTypeId = (int)details.assetType,
-                IsForSale = details.isForSale,
-                IsPublicDomain = details.isForSale && details.price == 0,
-                Creator = new
-                {
-                    Id = details.creatorTargetId,
-                    Name = details.creatorName,
-                },
-            };
-        }
 
 		private void CheckServerAuth(string auth)
 		{
@@ -2177,30 +3526,8 @@ namespace Roblox.Website.Controllers
 			};
 		}
         
-        [HttpGetBypass("GetAllowedMD5Hashes")]
-        public MVC.ActionResult<dynamic> AllowedMD5Hashes()
-        {
-            List<string> allowedList = new List<string>()
-            {
-                "d0780fcc43a4004332ebcfd64886875c"
-            };
-
-            return new { data = allowedList };
-        }
-        
-		[HttpGetBypass("GetAllowedSecurityVersions")]
-		[HttpGetBypass("GetAllowedSecurityKeys")]
-		public Microsoft.AspNetCore.Mvc.IActionResult AllowedSecurityVersions()
-		{
-			return new Microsoft.AspNetCore.Mvc.ContentResult 
-			{
-				Content = @"{""data"": [""""I'm so silly""""]}",
-				ContentType = "text/plain"
-			};
-		}
-        
 		[HttpGetBypass("Setting/QuietGet/{type}")]
-		public MVC.ActionResult<dynamic> GetAppSettings(string type)
+		public MVC.ActionResult<dynamic> GetAppSettings(string type, [MVC.FromQuery] string? apiKey = "")
 		{
 			try
 			{
@@ -2210,7 +3537,23 @@ namespace Roblox.Website.Controllers
 					return "Go away";
 				}
 
-				string jsonFilePath = Path.Combine(Configuration.JsonDataDirectory, type + ".json");
+				bool use2015 = apiKey.Equals("2015MRCC-2015-2015-2015-2015MidRCC15", StringComparison.OrdinalIgnoreCase);
+				
+				string fileName = type;
+				if (use2015)
+				{
+					fileName = type + "2015";
+					Console.WriteLine($"[RetrieveClientFFlags] Using 2015 flags for: {type}");
+				}
+
+				string jsonFilePath = Path.Combine(Configuration.JsonDataDirectory, fileName + ".json");
+				
+				if (use2015 && !System.IO.File.Exists(jsonFilePath))
+				{
+					Console.WriteLine($"[RetrieveClientFFlags] 2015 flasg not found, falling back");
+					jsonFilePath = Path.Combine(Configuration.JsonDataDirectory, type + ".json");
+				}
+
 				string jsonContent = System.IO.File.ReadAllText(jsonFilePath);
 				dynamic? clientAppSettingsData = JsonConvert.DeserializeObject<ExpandoObject>(jsonContent);
 
@@ -2249,18 +3592,6 @@ namespace Roblox.Website.Controllers
                 isMarketplaceEnabledForUser = true,
                 isMarketplaceEnabledForGroup = true,
             };
-        }
-
-        [HttpGetBypass("/currency/balance")]
-        public async Task<dynamic> GetBalance()
-        {
-            return await services.economy.GetBalance(CreatorType.User, safeUserSession.userId);
-        }
-
-        [HttpGetBypass("/ownership/hasasset")]
-        public async Task<string> DoesOwnAsset(long userId, long assetId)
-        {
-            return (await services.users.GetUserAssets(userId, assetId)).Any() ? "true" : "false";
         }
 
         [HttpPostBypass("persistence/increment")]

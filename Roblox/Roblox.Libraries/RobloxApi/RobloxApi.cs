@@ -307,7 +307,48 @@ public class RobloxApi
             }
         }
         // last attempt
-        return await GetProductInfoFromHtml(assetId);
+        return await GetProductInfoFromRealRoblox(assetId);
+    }
+	
+	public async Task<ProductDataResponse> GetProductInfoFromRealRoblox(long assetId, bool allFieldsRequired = false)
+    {
+        var watch = new Stopwatch();
+        watch.Start();
+        const int maxAttemptTimeMs = 5000;
+        
+        while (watch.ElapsedMilliseconds < maxAttemptTimeMs)
+        {
+            try
+            {
+                using var cancel = new CancellationTokenSource();
+                cancel.CancelAfter(TimeSpan.FromMilliseconds(maxAttemptTimeMs));
+                var url = $"https://economy.roblox.com/v2/assets/{assetId}/details";
+                var result = await _client.GetAsync(url, cancel.Token);
+                if (result.StatusCode is HttpStatusCode.TooManyRequests)
+                {
+                    Writer.Info(LogGroup.RealRobloxApi, "conversion error - got 429 during getproductinfo");
+                    if (allFieldsRequired)
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(1), cancel.Token);
+                        continue;
+                    }
+                    break; // switch to html
+                }
+                if (!result.IsSuccessStatusCode)
+                    throw new Exception("Unexpected response from Roblox: " + result.StatusCode + " (URL=" + url + ")");
+                var str = await result.Content.ReadAsStringAsync(cancel.Token);
+                var des = JsonSerializer.Deserialize<ProductDataResponse>(str);
+                if (des == null)
+                    throw new Exception("Null product data response from Roblox");
+                return des;
+            }
+            catch (TaskCanceledException)
+            {
+                break;
+            }
+        }
+        // last attempt
+        return await GetProductInfo(assetId);
     }
 
     public async Task<Stream> GetStreamAsync(string url)
@@ -318,29 +359,49 @@ public class RobloxApi
         return await strResult.Content.ReadAsStreamAsync();
     }
 
-    public async Task<Stream> GetAssetContent(long assetId)
-    {
-        while (true)
-        {
-            var result = await _client.GetAsync($"https://assetdelivery.roblox.com/v1/assetId/{assetId}");
-            if (result.StatusCode is HttpStatusCode.TooManyRequests)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(2));
-                continue;
-            }
-            if (!result.IsSuccessStatusCode)
-                throw new Exception("Unexpected response from Roblox: " + result.StatusCode);
-            var str = await result.Content.ReadAsStringAsync();
-            var bod = JsonSerializer.Deserialize<AssetDeliveryResponse>(str);
-            if (bod == null)
-                throw new Exception("Null " + nameof(AssetDeliveryResponse) + " from Roblox");
-            if (string.IsNullOrEmpty(bod.location))
-                throw new Exception("Roblox did not give a URL for this asset content. Is the URL valid?");
+	public async Task<Stream> GetAssetContent(long assetId)
+	{
+		if (!_client.DefaultRequestHeaders.UserAgent.Any())
+		{
+			_client.DefaultRequestHeaders.UserAgent.ParseAdd("Roblox/WinInet");
+		}
 
-            var strResult = await _client.GetAsync(bod.location);
-            return await strResult.Content.ReadAsStreamAsync();
-        }
-    }
+		try
+		{
+			var result = await _client.GetAsync($"https://assetdelivery.roblox.com/v1/assetId/{assetId}");
+			if (result.StatusCode == HttpStatusCode.TooManyRequests)
+			{
+				await Task.Delay(TimeSpan.FromSeconds(2));
+				result = await _client.GetAsync($"https://assetdelivery.roblox.com/v1/assetId/{assetId}");
+			}
+
+			if (!result.IsSuccessStatusCode)
+				throw new Exception("Unexpected response from Roblox: " + result.StatusCode);
+
+
+			var str = await result.Content.ReadAsStringAsync();
+			var bod = JsonSerializer.Deserialize<AssetDeliveryResponse>(str);
+
+			if (bod != null && !string.IsNullOrEmpty(bod.location))
+			{
+				var strResult = await _client.GetAsync(bod.location);
+				return await strResult.Content.ReadAsStreamAsync();
+			}
+
+			throw new Exception("Roblox did not provide a URL for asset content.");
+		}
+		catch (Exception ex)
+		{
+			Writer.Info(LogGroup.RealRobloxApi, "Roblox asset delivery failed for {0}: {1}. Using gs url", assetId, ex.Message);
+
+			var GSfallback = $"{Configuration.GSUrl}/asset/roblox/?id={assetId}";
+			var GSResult = await _client.GetAsync(GSfallback);
+			if (!GSResult.IsSuccessStatusCode)
+				throw new Exception($"Fallback endpoint failed for asset {assetId}: {GSResult.StatusCode}");
+
+			return await GSResult.Content.ReadAsStreamAsync();
+		}
+	}
 
     private static Regex assetMatchUrlRegex = new Regex("data-mediathumb-url=\"(.+?)\"");
     
@@ -480,7 +541,7 @@ public class RobloxApi
 
     public async Task<BundleResponseEntry> GetBundle(long bundleId)
     {
-        var url = "https://catalog.roblox.com/v1/bundles/details?bundleIds=" + bundleId; // MultiGetBundlesResponse
+        var url = "https://catalog.roproxy.com/v1/bundles/details?bundleIds=" + bundleId; // MultiGetBundlesResponse
         var result = await _client.GetAsync(url);
         if (!result.IsSuccessStatusCode)
             throw new Exception("GetBundle error: " + bundleId + " " + result.StatusCode);

@@ -1,3 +1,4 @@
+## please do not contact me on trying to get the source setup. there are many guides on how to and if you read this guide properly you shouldn't need help.
 <div align="center">
     <p>
       <h1>BubbaBlox</h1>
@@ -17,7 +18,7 @@ this guide will be mostly a mix of the original one, and some things i added.
 
 ## requirements
 - at least Windows 10, Linux is untested as my server is a Windows machine. You should use Wine to run everything if you are using linux
-- a 10 character long domain with SSL for HTTPS
+- a 10 character long domain that supports both HTTP and HTTPS
 - knowledge on how things like this work (you should have at least some experience with websites and coding to be able to host this. it's really not hard to set up if you know what you're doing.)
 
 ## database
@@ -27,8 +28,8 @@ this guide will be mostly a mix of the original one, and some things i added.
 
 ```psql --username=** --dbname=* < schema.sql```
 
-- * = the name of the database you want to use, if this is your first time installing, use postgres
-- ** = your postgres username, default is postgres if you didn't set any in the setup
+- ```*``` = the name of the database you want to use, if this is your first time installing, use postgres
+- ```**``` = your postgres username, default is postgres if you didn't set any in the setup
 
 ## setting up
 
@@ -40,8 +41,8 @@ to:
 
 ``` "Postgres": "Host=127.0.0.1; Database=*; Password=your Postgres password; Username=**; Maximum Pool Size=20",```
 
-- * = the name of the database you want to use, if this is your first time installing, use postgres
-- ** = your postgres username, default is postgres if you didn't set any in the setup
+- ```*``` = the name of the database you want to use, if this is your first time installing, use postgres
+- ```**``` = your postgres username, default is postgres if you didn't set any in the setup
 
 - press ```CTRL + H``` and change ```C:\\Users\\Admin\\Desktop\\Revival\\ecsr\\ecsrev-main\\services\\``` to ```C:\\whereever your ECS folder is\\``` (make sure it's double slashed! so it should look like ```C:\\folder1\\folder2\\```)
 - you should update everything in the appsettings.json file to your configuration.

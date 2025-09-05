@@ -122,3 +122,8 @@ public class SetPlayableRequest
 {
     public bool isPlayable { get; set; }
 }
+
+public class SetYearReq
+{
+    public int year { get; set; }
+}

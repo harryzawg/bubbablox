@@ -28,17 +28,17 @@ export const getGameMedia = ({ universeId }) => {
   return request('GET', getFullUrl('games', `/v2/games/${universeId}/media`)).then(d => d.data.data);
 }
 
-export const launchGame = async ({ placeId }) => {
+export const launchGame = async ({ placeId, year = 2016 }) => {
   const result = await request('GET', getBaseUrl() + '/game/get-join-script?placeId=' + encodeURIComponent(placeId));
 
   let launchUrl;
   
   if (typeof result.data === 'string') {
-    const match = result.data.match(/&ticket=([^"]+)/);
+    const match = result.data.match(/ticket=([^&"']+)/);
     if (match && match[1]) {
       const ticket = match[1];
-      launchUrl = `bbclient://join?place=${placeId}&ticket=${encodeURIComponent(ticket)}`;
-      console.log("got raw response, using bbclient://");
+      launchUrl = `bbclient://join?place=${placeId}&ticket=${encodeURIComponent(ticket)}&year=${year}`;
+      console.log("got raw response, using bbclient:// with year:", year);
     } else {
       console.error("Could not extract ticket from raw response (is user authenticated?)", result.data);
       return;

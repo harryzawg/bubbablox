@@ -155,6 +155,12 @@
 					link: "/admin/bundle/copy",
 					icon: CopyIcon,
 					permission: "CreateBundleCopiedFromRoblox",
+				},
+				{
+					name: "Copy Animation Bundle from ROBLOX",
+					link: "/admin/animation-bundle/copy",
+					icon: CopyIcon,
+					permission: "CreateBundleCopiedFromRoblox",
 				}
 			]
 		}

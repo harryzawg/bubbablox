@@ -9,6 +9,7 @@ namespace Roblox.Website.Controllers
         public UsersService users { get; } = new();
         public AccountInformationService accountInformation { get; } = new();
         public AvatarService avatar { get; } = new();
+		public FilterService filter { get; } = new();
         public FriendsService friends { get; } = new();
         public GamesService games { get; } = new();
         public GroupsService groups { get; } = new();

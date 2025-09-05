@@ -94,5 +94,12 @@ public class ApiController : ControllerBase
             LinkUrl = alert?.url ?? "",
         };
     }
+	
+	[HttpGet("v1/items/restrictions")]
+    public async Task<dynamic> GetItemRestrictions(string assetIds)
+    {
+        var ids = assetIds.Split(",").Select(long.Parse).ToArray();
+        return await services.assets.MultiGetAssetRestrictions(ids);
+    }
 }
 

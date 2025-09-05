@@ -479,7 +479,15 @@ public class WebController : ControllerBase
 		string auth = $"{baselink}/Login/Negotiate.ashx";
 		string ticket = Request.Cookies[".ROBLOSECURITY"];
 
-		string args = $"-a \"{auth}\" -j \"{baselink}/game/PlaceLauncher.ashx?placeid={placeId}&ticket={ticket}\" -t \"{ticket}\"";
+		int? year = await services.games.GetPlaceYear(placeId);
+		
+		string PL = $"{baselink}/game/PlaceLauncher.ashx?placeid={placeId}&ticket={ticket}";
+		if (year.HasValue)
+		{
+			PL += $"&{year.Value}=true";
+		}
+
+		string args = $"-a \"{auth}\" -j \"{PL}\" -t \"{ticket}\"";
 
 		return args;
 	}

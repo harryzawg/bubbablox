@@ -52,6 +52,7 @@ const NavSideBar = props => {
   const authStore = AuthenticationStore.useContainer();
   const navStore = NavigationStore.useContainer();
   const mainNavBarRef = props.mainNavBarRef;
+  const [avatarMenu, setAvatarMenu] = useState('R15');
   const [dimensions, setDimensions] = useState({
     height: window.innerHeight,
     width: window.innerWidth
@@ -61,6 +62,11 @@ const NavSideBar = props => {
   const s = useNavSideBarStyles();
   
   useEffect(() => {
+    const menuType = localStorage.getItem('rbx_avatarmenu_type');
+      if (menuType === 'Legacy' || menuType === 'R15') {
+        setAvatarMenu(menuType);
+      }
+
     window.addEventListener('resize', () => {
       setDimensions({
         height: window.innerHeight,
@@ -113,6 +119,8 @@ const NavSideBar = props => {
   if (navStore.isSidebarOpen === false && dimensions.width <= 1300) {
     return null;
   }
+  
+  const characterUrl = avatarMenu === 'R15' ? '/My/Avatar' : '/My/Character.aspx';
 
   return <div className={s.container}>
     <div className={s.card} style={{ paddingTop: paddingTop }}>
@@ -122,7 +130,7 @@ const NavSideBar = props => {
       <LinkEntry name='Profile' url={'/users/' + authStore.userId + '/profile'} icon='icon-nav-profile' />
       <LinkEntry name='Messages' url='/My/Messages' icon='icon-nav-message' count={authStore.notificationCount.messages} />
       <LinkEntry name='Friends' url={'/users/' + authStore.userId + '/friends'} icon='icon-nav-friends' count={authStore.notificationCount.friendRequests} />
-      <LinkEntry name='Character' url='/My/Character.aspx' icon='icon-nav-charactercustomizer' />
+      <LinkEntry name='Avatar' url={characterUrl} icon='icon-nav-charactercustomizer' />
       <LinkEntry name='Inventory' url={'/users/' + authStore.userId + '/inventory'} icon='icon-nav-inventory' />
       <LinkEntry name='Trade' url='/My/Trades.aspx' icon='icon-nav-trade' count={authStore.notificationCount.trades} />
       <LinkEntry name='Groups' url='/My/Groups.aspx' icon='icon-nav-group' />

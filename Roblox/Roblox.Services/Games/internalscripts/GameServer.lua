@@ -1,7 +1,7 @@
 --print("[info] gameserver.txt start")
 
 ------------------- CONFIG -------------------
-local url = "http://bb.zawg.ca";
+local url = "http://bbblox.org";
 local port = %port%
 local placeId = %placeId%;
 local FakePlace = 1818;

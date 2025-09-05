@@ -16,5 +16,8 @@
     <ItemGroup>
       <ProjectReference Include="..\Roblox.Metrics\Roblox.Metrics.csproj" />
     </ItemGroup>
-
+	
+	<ItemGroup>
+	  <ProjectReference Include="..\Roblox.Configuration\Roblox.Configuration.csproj" />
+	</ItemGroup>
 </Project>

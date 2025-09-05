@@ -1,0 +1,51 @@
+<roblox!‰ÿ
+
+                META$   "       ð      ExplicitAutoJoints   trueINST          ð
+    	   Accessory        INST          ð   
+   Attachment       INST          ð      Part       INST          ð
+   
+   SpecialMesh       INST#   !       ð      Vector3Value          PROP          ð
+    
+   AccessoryType    PROP&   %       ð
+       AttachmentPoint €~™š{™™šPROP"           ð       AttributesSerialize    PROP          ð       Capabilities!        PROP          ð       DefinesCapabilities PROP           ð       Name
+   LivignArt_SSNPROP           ð    
+   SourceAssetId       PROP          ð       Tags    PROP"           ð      AttributesSerialize    PROP;   @       ð
+      CFrame   €? Ê]  1Ê]
+ 0  €  à€?g   }ÌÌÑ{˜|PROP          ð      Capabilities!        PROP          ð      DefinesCapabilities PROP          à      Name	 ÐeckAttachmentPROP           ð   
+   SourceAssetId       PROP          ð      Tags    PROP          ð       Visible PROP          ð      Anchored PROP"           ð      AttributesSerialize    PROP          ð   
+   BackParamA~  PROP          ð   
+   BackParamB~   PROP          ð	   
+   BackSurface    PROP          ð      BackSurfaceInput    PROP          ð
+      BottomParamA~  PROP          ð
+      BottomParamB~   PROP          ð
+   
+   BottomSurface    PROP!          ð      BottomSurfaceInput    PROP          ð
+      CFrame„M2€™™¢ƒÛ0¢PROP          ð   
+   CanCollidePROP          ð      CanQueryPROP          ð      CanTouchPROP          ð      Capabilities!        PROP          ð   
+   CastShadowPROP$   "       ð      CollisionGroup    DefaultPROP          ð      CollisionGroupId    PROP          ð   
+   Color3uint8£¢¥PROP$   "       ð      CustomPhysicalProperties PROP          ð      DefinesCapabilities PROP          ð      EnableFluidForcesPROP          ð	   
+   FrontParamA~  PROP          ð	   
+   FrontParamB~   PROP          ð
+      FrontSurface    PROP           ð      FrontSurfaceInput    PROP          ð   
+   LeftParamA~  PROP          ð   
+   LeftParamB~   PROP          ð	   
+   LeftSurface    PROP          ð      LeftSurfaceInput    PROP          ð      LockedPROP          ð      Massless PROP          ð      Material   PROP&   &       ñ	      MaterialVariantS
+ ized    PROP          ð      Name   HandlePROP"   !       ð   
+   PivotOffset          PROP          ð	   
+   Reflectance    PROP          ð	   
+   RightParamA~  PROP          ð	   
+   RightParamB~   PROP          ð
+      RightSurface    PROP           ð      RightSurfaceInput    PROP          ð
+      RootPriority    PROP"           ð   
+   RotVelocity         PROP           ð   
+   SourceAssetId       PROP          ð      Tags    PROP          ð    	   TopParamA~  PROP          ð    	   TopParamB~   PROP          ð   
+   TopSurface    PROP          ð
+      TopSurfaceInput    PROP          ð
+      Transparency    PROP          ð      Velocity            PROP          ð
+   
+   formFactorRaw   PROP          ð      shape   PROP          ð
+      size€™™žffl€ÌÌÐPROP"           ð      AttributesSerialize    PROP          ð      Capabilities!        PROP          ð      DefinesCapabilities PROP-   +       ð      MeshId   rbxassetid://17858522136PROP          ð      MeshType   PROP          ð      Name   MeshPROP          ð      Offset            PROP          ð
+      Scale™š   LÌÌPROP           ð   
+   SourceAssetId       PROP          ð      Tags    PROP0   .       ð   	   TextureId   rbxassetid://119133728661973PROP"           ð   
+   VertexColor         PROP&   $       ð      AttributesSerialize        PROP    %       ö       Capabilities!  P     PROP           ð      DefinesCapabilities  PROP&   -       @    ÷Name   OriginalSize PlSizePROP!   &       ö   
+   SourceAssetId  P   PROP          @    ÐTags        PROP(   &       ð      Value€€™™™™žžffffll€€ÌÌÌÌÐÐPRNT   5       ?   n  `   END     	       </roblox>

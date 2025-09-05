@@ -1,0 +1,36 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.localhost//roblox.xsd" version="4">
+    <External>null</External>
+    <External>nil</External>
+    <Item class="ModuleScript" referent="RBX4E88FA51DD69451F8E5B515266367B51">
+		<Properties>
+			<bool name ="Disabled">false</bool>
+            <Content name="LinkedSource"><null></null></Content>
+			<string name ="Name">LocalScript</string>
+            <string name="ScriptGuid">{1166F3A8-F70B-4DAF-B7C6-3C89D8BBC049}</string>
+			<ProtectedString name="Source"><![CDATA[local app = game:GetService('Players').LocalPlayer.CharacterAppearance script.Parent=nil  print(app)
+origstring =app
+local foundchar=false
+local words = {}
+for w in (origstring .. ';'):gmatch('([^;]*);') do 
+	table.insert(words, w) 
+end
+local num1=words[1]
+local number= nil
+function loadchar()
+	wait(0.5)
+	local remote=game:GetService("ReplicatedStorage"):WaitForChild("CharApp")
+	remote:FireServer(app)
+end
+			game:GetService('Players').LocalPlayer.CharacterAdded:connect(function()
+				pcall(function()
+					loadchar()
+				end)
+			end)
+
+if game:GetService('Players').LocalPlayer.Character~=nil then
+	loadchar()
+end]]></ProtectedString>
+            <BinaryString name="Tags"></BinaryString>
+		</Properties>
+	</Item>
+</roblox>

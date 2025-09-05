@@ -89,31 +89,41 @@ public class AvatarService : ServiceBase, IService
         };
     }
 
-    private readonly Models.Assets.Type[] _wearableAssetTypes = new[]
-    {
-        Type.Shirt,
-        Type.Pants,
-        Type.TeeShirt,
-        
-        Type.Face,
-        Type.Hat,
-        Type.FrontAccessory,
-        Type.BackAccessory,
-        Type.WaistAccessory,
-        Type.HairAccessory,
-        Type.NeckAccessory,
-        Type.ShoulderAccessory,
-        Type.FaceAccessory,
-        
-        Type.LeftArm,
-        Type.RightArm,
-        Type.LeftLeg,
-        Type.RightLeg,
-        Type.Torso,
-        Type.Head,
-        
-        Type.Gear,
-    };
+	private readonly Models.Assets.Type[] _wearableAssetTypes = new[]
+	{
+		Type.Shirt,
+		Type.Pants,
+		Type.TeeShirt,
+		
+		Type.Face,
+		Type.Hat,
+		Type.FrontAccessory,
+		Type.BackAccessory,
+		Type.WaistAccessory,
+		Type.HairAccessory,
+		Type.NeckAccessory,
+		Type.ShoulderAccessory,
+		Type.FaceAccessory,
+		
+		Type.LeftArm,
+		Type.RightArm,
+		Type.LeftLeg,
+		Type.RightLeg,
+		Type.Torso,
+		Type.Head,
+		
+		Type.Gear,
+
+		Type.ClimbAnimation,
+		Type.FallAnimation,
+		Type.IdleAnimation,
+		Type.JumpAnimation,
+		Type.RunAnimation,
+		Type.SwimAnimation,
+		Type.WalkAnimation,
+		Type.EmoteAnimation,
+	};
+
     
     /// <summary>
     /// Filter the dirtyAssetIds. This will remove moderated/pending items, items the user doesn't own, invalid items, etc.
@@ -185,13 +195,102 @@ public class AvatarService : ServiceBase, IService
 
         return assetIds;
     }
+	// add these to dto lateer
+	public class AvatarTypeEntry
+	{
+		public bool isR15 { get; set; }
+	}
 
-    public string GetAvatarHash(ColorEntry colors, IEnumerable<long> assetVersionIds)
+	public class ScaleEntry
+	{
+		public int height { get; set; }
+		public int width { get; set; }
+		public int head { get; set; }
+		public int proportion { get; set; }
+		public int bodyType { get; set; }
+	}
+	
+	public async Task<AvatarTypeEntry> GetAvatarType(long userId)
+	{
+		var result = await db.QuerySingleOrDefaultAsync<AvatarTypeEntry>(
+			"SELECT r15 as isR15 FROM user_avatar_type WHERE user_id = :user_id",
+			new { user_id = userId });
+		
+		return result ?? new AvatarTypeEntry { isR15 = false }; // default to r6 if bugged
+	}
+
+	public async Task<ScaleEntry> GetAvatarScales(long userId)
+	{
+		var result = await db.QuerySingleOrDefaultAsync<ScaleEntry>(
+			"SELECT height, width, head, proportion, body_type as bodyType FROM user_avatar_type WHERE user_id = :user_id",
+			new { user_id = userId });
+		
+		// default values if bugged
+		return result ?? new ScaleEntry 
+		{ 
+			height = 100, 
+			width = 100, 
+			head = 100, 
+			proportion = 100, 
+			bodyType = 100 
+		};
+	}
+
+	public async Task UpdateScales(long userId, decimal height, decimal width, decimal head, decimal proportion, decimal bodyType)
+	{
+		var scales = new ScaleEntry
+		{
+			height = (int)(height * 100),
+			width = (int)(width * 100),
+			head = (int)(head * 100),
+			proportion = (int)(proportion * 100),
+			bodyType = (int)(bodyType * 100)
+		};
+		
+		await db.ExecuteAsync(@"
+			INSERT INTO user_avatar_type (user_id, height, width, head, proportion, body_type) 
+			VALUES (:user_id, :height, :width, :head, :proportion, :body_type)
+			ON CONFLICT (user_id) 
+			DO UPDATE SET 
+				height = :height, 
+				width = :width, 
+				head = :head, 
+				proportion = :proportion, 
+				body_type = :body_type",
+		new 
+		{
+			user_id = userId,
+			height = scales.height,
+			width = scales.width,
+			head = scales.head,
+			proportion = scales.proportion,
+			body_type = scales.bodyType
+		});
+	}
+	
+	public async Task UpdateAvatarType(long userId, int playerAvatarType)
+	{
+		var isR15 = playerAvatarType == 2; // 2 = R15, 1 = R6
+		
+		await db.ExecuteAsync(@"
+			INSERT INTO user_avatar_type (user_id, r15) 
+			VALUES (:user_id, :r15)
+			ON CONFLICT (user_id) 
+			DO UPDATE SET 
+				r15 = :r15",
+		new 
+		{
+			user_id = userId,
+			r15 = isR15,
+		});
+	}
+
+    public string GetAvatarHash(ColorEntry colors, IEnumerable<long> assetVersionIds, ScaleEntry scales, AvatarTypeEntry avatarType)
     {
         var assets = assetVersionIds.Distinct().ToList();
         assets.Sort((a, b) => a > b ? 1 : a == b ? 0 : -1);
         var str =
-            $"avatar-hash-1.4:{string.Join(",", assets)}:{colors.headColorId},{colors.torsoColorId},{colors.leftArmColorId},{colors.rightArmColorId},{colors.leftLegColorId},{colors.rightLegColorId}";
+            $"avatar-hash-1.4:{string.Join(",", assets)}:{colors.headColorId},{colors.torsoColorId},{colors.leftArmColorId},{colors.rightArmColorId},{colors.leftLegColorId},{colors.rightLegColorId},{(avatarType.isR15 ? "R15" : "R6")},{scales.height},{scales.width},{scales.head},{scales.proportion},{scales.bodyType}";
         var hasher = SHA256.Create();
         var bits = hasher.ComputeHash(Encoding.UTF8.GetBytes(str));
         return Convert.ToHexString(bits).ToLower();
@@ -242,7 +341,9 @@ public class AvatarService : ServiceBase, IService
             }
 
             var assetVersions = await MultiGetAssetVersionsFromAssetIds(idsList);
-            return GetAvatarHash(colors, assetVersions);
+			var avatarType = await GetAvatarType(userId);
+			var scales = await GetAvatarScales(userId);
+            return GetAvatarHash(colors, assetVersions, scales, avatarType);
         });
     }
 
@@ -257,6 +358,14 @@ public class AvatarService : ServiceBase, IService
                 headshot_url = headshotImage,
             });
     }
+	
+	public async Task<string?> GetUserHeadshotUrl(long userId)
+	{
+		return await db.QuerySingleOrDefaultAsync<string?>(
+			"SELECT headshot_thumbnail_url FROM user_avatar WHERE user_id = :user_id",
+			new { user_id = userId }
+		);
+	}
 
     public async Task<IEnumerable<OutfitEntry>> GetUserOutfits(long userId, int limit, int offset)
     {
@@ -419,6 +528,7 @@ public class AvatarService : ServiceBase, IService
 		var torso = 0;
 		var head = 0;
 		var animations = 0;
+		var emoteAnimations = 0;	
 
 		// track bad assets
 		var invalid = new List<string>();
@@ -446,9 +556,19 @@ public class AvatarService : ServiceBase, IService
 					pants++;
 					if (pants > 1) invalid.Add($"too many Pants (limit 1) - Asset {item.id}");
 					break;
-				case Models.Assets.Type.Animation:
+				case Models.Assets.Type.ClimbAnimation:
+				case Models.Assets.Type.FallAnimation:
+				case Models.Assets.Type.IdleAnimation:
+				case Models.Assets.Type.JumpAnimation:
+				case Models.Assets.Type.RunAnimation:
+				case Models.Assets.Type.SwimAnimation:
+				case Models.Assets.Type.WalkAnimation:
 					animations++;
-					if (animations > 1) invalid.Add($"too many Animations (limit 1) - Asset {item.id}");
+					if (animations > 7) invalid.Add($"too many AvatarAnimations (limit 7) - Asset {item.id}");
+					break;
+				case Models.Assets.Type.EmoteAnimation:
+					emoteAnimations++;
+					if (emoteAnimations > 8) invalid.Add($"too many Emotes (limit 8) - Asset {item.id}");
 					break;
 				case Models.Assets.Type.Gear:
 					gear++;
@@ -643,7 +763,7 @@ public class AvatarService : ServiceBase, IService
             },
             playerAvatarType = "R6",
         };
-        // Sane timeout of 30 minutes. If a render takes longer than this, something's probably broken
+        // Sane timeout of 30 seconds. If a render takes longer than this, something's probably broken
 		 using var cancellation = new CancellationTokenSource();
 		cancellation.CancelAfter(TimeSpan.FromSeconds(30));
 		
@@ -669,6 +789,99 @@ public class AvatarService : ServiceBase, IService
 		}
 		
 		// Finally, update the avatar thumbnail
+		await UpdateUserAvatarImages(userId, headshotUrl, thumbnailUrl);
+	}
+	
+    public async Task RedrawAvatarR15(long userId, IEnumerable<long>? newAssetIds = null, ColorEntry? colors = null, bool forceRedraw = false, bool ignoreLock = true)
+    {
+        // required services
+        using var assets = ServiceProvider.GetOrCreate<AssetsService>();
+
+        await using var redLock =
+            await Cache.redLock.CreateLockAsync(GetAvatarRedLockKey(userId), TimeSpan.FromSeconds(5));
+        if (!redLock.IsAcquired && !ignoreLock) throw new LockNotAcquiredException();
+
+        var assetIds = newAssetIds?.ToList();
+
+        // If list provided is null, then the caller wants us to grab the items ourselves
+        assetIds ??= (await GetWornAssets(userId)).ToList();
+        colors ??= await GetAvatarColors(userId);
+
+        if (!AreColorsOk(colors))
+            throw new RobloxException(400, 0, "Colors are invalid");
+
+
+        if (assetIds.Count != 0)
+        {
+            assetIds = (await FilterAssetsForRender(userId, assetIds)).ToList();
+        }
+
+        var assetsOk = await ConfirmAssetSelectionIsOkForRender(userId, assetIds);
+        if (!assetsOk)
+            throw new RobloxException(400, 0, "One or more assets are invalid");
+        // Now, update the avatar. This returns a hash
+        var avatarHash = await UpdateUserAvatar(userId, colors, assetIds);
+        // Get our image urls
+        var thumbnailUrl = $"/images/thumbnails/{avatarHash}_thumbnail.png";
+        var headshotUrl = $"/images/thumbnails/{avatarHash}_headshot.png";
+        if (!forceRedraw)
+        {
+            // Check if the hash exists already - If they do, we can skip rendering!
+            if (File.Exists(Configuration.PublicDirectory + thumbnailUrl) &&
+                File.Exists(Configuration.PublicDirectory + headshotUrl))
+            {
+                // Since both files exist, we can just update the URL and exit
+                await UpdateUserAvatarImages(userId, headshotUrl, thumbnailUrl);
+                return;
+            }
+        }
+
+        // We have to call render library now.
+        // Set image urls to null:
+        await UpdateUserAvatarImages(userId, null, null);
+        // Create request
+        var extendedAssetDetails = await assets.MultiGetInfoById(assetIds);
+		// Sane timeout of 30 seconds. If a render takes longer than this, something's probably broken
+		using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+		var Thumb = CommandHandler.RequestPlayerThumbnailR15(userId, cancellation.Token);
+		var Headshot = CommandHandler.RequestPlayerHeadshot(new Roblox.Rendering.AvatarData()
+		{
+			userId = userId,
+			assets = extendedAssetDetails.Select(c => new AvatarAssetEntry()
+			{
+				id = c.id,
+				assetType = new AvatarAssetTypeEntry() { id = (int)c.assetType }
+			}),
+			bodyColors = new AvatarBodyColors()
+			{
+				headColorId = colors.headColorId,
+				torsoColorId = colors.torsoColorId,
+				leftArmColorId = colors.leftArmColorId,
+				rightArmColorId = colors.rightArmColorId,
+				leftLegColorId = colors.leftLegColorId,
+				rightLegColorId = colors.rightLegColorId,
+			},
+			playerAvatarType = "R6"
+		}, cancellation.Token);
+
+		await Task.WhenAll(Thumb, Headshot);
+
+		await using (var fileStream = File.Create(Configuration.PublicDirectory + thumbnailUrl))
+		{
+			var thumbStream = await Thumb;
+			thumbStream.Seek(0, SeekOrigin.Begin);
+			await thumbStream.CopyToAsync(fileStream, cancellation.Token);
+			await UpdateUserAvatarImages(userId, null, thumbnailUrl);
+		}
+
+		await using (var fileStream = File.Create(Configuration.PublicDirectory + headshotUrl))
+		{
+			var headStream = await Headshot;
+			headStream.Seek(0, SeekOrigin.Begin);
+			await headStream.CopyToAsync(fileStream, cancellation.Token);
+		}
+
 		await UpdateUserAvatarImages(userId, headshotUrl, thumbnailUrl);
 	}
 

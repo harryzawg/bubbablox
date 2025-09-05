@@ -42,11 +42,12 @@ const PlayButton = props => {
     if (getFlag('launchUsingEsURI', false)) {
       e?.preventDefault();
       if (!auth.isAuthenticated) {
-        window.location.href = '/Login';
+        window.location.href = '/';
         return;
       }
       launchGame({
         placeId: props.placeId,
+		year: gameDetails.placeDetails?.year || 2016,
       }).catch(e => {
 		// todo: modal
         setError(e.message);

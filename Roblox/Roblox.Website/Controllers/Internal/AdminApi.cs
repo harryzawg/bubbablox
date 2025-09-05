@@ -42,6 +42,7 @@ using Roblox.Services.Exceptions;
 using Roblox.Website.Filters;
 using Roblox.Website.WebsiteModels.Asset;
 using Roblox.Website.WebsiteModels.Admin.MigrateUGC;
+using Roblox.Website.WebsiteModels.Admin.Thumbnails;
 using Type = Roblox.Models.Assets.Type;
 
 // ReSharper disable InconsistentNaming
@@ -890,12 +891,12 @@ public class AdminApiController : ControllerBase
     public async Task ModerateAndDeleteItem([Required, FromBody] ModerateAssetRequest request)
     {
         // 30 deletions/hour
-        if (!await services.cooldown.TryIncrementBucketCooldown("DeleteAssetV1_Hour", 30, TimeSpan.FromHours(1)))
-            throw new StaffException("Asset deletion rate limit exceeded (hour). Contact an administrator.");
+        //if (!await services.cooldown.TryIncrementBucketCooldown("DeleteAssetV1_Hour", 30, TimeSpan.FromHours(1)))
+            //throw new StaffException("Asset deletion rate limit exceeded (hour). Contact an administrator.");
         
         // 100/day
-        if (!await services.cooldown.TryIncrementBucketCooldown("DeleteAssetV1_Day", 100, TimeSpan.FromDays(1)))
-            throw new StaffException("Asset deletion rate limit exceeded (day). Contact an administrator.");
+        //if (!await services.cooldown.TryIncrementBucketCooldown("DeleteAssetV1_Day", 100, TimeSpan.FromDays(1)))
+           // throw new StaffException("Asset deletion rate limit exceeded (day). Contact an administrator.");
 
         await ModerateAsset(request);
         
@@ -2776,6 +2777,7 @@ Thank you for your understanding,
             description = details.description,
             genre = Genre.All,
             isForSale = false,
+			isVisible = true,
             isLimited = false,
             isLimitedUnique = false,
             maxCopies = null,
@@ -2784,6 +2786,274 @@ Thank you for your understanding,
             packageAssetIds = string.Join(",", ids.Select(c => c.ToString())),
         });
     }
+	
+	[HttpPost("bundle/copy-animation-bundle"), StaffFilter(Access.CreateBundleCopiedFromRoblox)]
+	public async Task<dynamic> CopyAnimationBundle(long bundleId)
+	{
+		long? IdleAssetId = null;
+		string BundleThumbHash = null;
+		var details = await services.robloxApi.GetBundle(bundleId);
+		if (details.bundleType != "AvatarAnimations") 
+			throw new StaffException("Invalid bundleType " + details.bundleType + ". Only AvatarAnimations bundles are supported.");
+		
+		// Check if duplicate?
+		var alreadyExists = await services.assets.SearchCatalog(new CatalogSearchRequest()
+		{
+			limit = 10,
+			include18Plus = true,
+			includeNotForSale = true,
+			creatorType = CreatorType.User,
+			creatorTargetId = 1,
+			keyword = details.name,
+		});
+		
+		if (alreadyExists._total > 0)
+		{
+			var existing = await services.assets.MultiGetInfoById(alreadyExists.data.Select(c => c.id));
+			foreach (var ent in existing)
+			{
+				if (ent.assetType == Type.Package && ent.name == details.name)
+				{
+					throw new StaffException("It looks like this bundle already exists: AssetID=" + ent.id);
+				}
+			}
+		}
+
+		var ids = new List<long>();
+		var ThumbTasks = new List<Task>();
+		
+		foreach (var item in details.items)
+		{
+			if (item.type != "Asset") continue;
+			
+			Console.WriteLine("Getting animation {0}", item.id);
+            var info = await services.robloxApi.GetProductInfo(item.id, false);
+            
+            Type assetType = MapAnimType(info.AssetTypeId?.ToString());
+            
+            if (assetType != Type.Animation)
+            {
+                Console.WriteLine("Skipping non-animation item {0} with type {1}", item.id, info.AssetTypeId);
+                continue;
+            }
+			
+			var content = await services.robloxApi.GetAssetContent(item.id);
+			var isOk = await services.assets.ValidateAssetFile(content, info.AssetTypeId.Value);
+			if (!isOk)
+				throw new StaffException("The asset file doesn't look correct. Please try again.");
+			
+			content.Position = 0;
+			
+			var assetDetails = await services.assets.CreateAsset(item.name, null, 1,
+				CreatorType.User, 1, content, info.AssetTypeId.Value, Genre.All, 
+				ModerationStatus.ReviewApproved, DateTime.UtcNow, DateTime.UtcNow, item.id);
+			
+			ids.Add(assetDetails.assetId);
+			
+			if (info.AssetTypeId?.ToString().Contains("IdleAnimation", StringComparison.OrdinalIgnoreCase) == true)
+			{
+				IdleAssetId = assetDetails.assetId;
+				Console.WriteLine($"got IdleAnimation for bundle thumb: {assetDetails.assetId}");
+			}
+			
+			ThumbTasks.Add(DownloadAndSetAnimThumb(item.id, assetDetails.assetId));
+		}
+
+		await Task.WhenAll(ThumbTasks);
+
+		 if (ids.Count == 0)
+				throw new StaffException("No valid animation assets were found in the bundle");
+			
+			var bundle = await CreateAsset(new CreateAssetRequest()
+			{
+				assetTypeId = Type.Package,
+				description = details.description,
+				genre = Genre.All,
+				isForSale = false,
+				isVisible = true,
+				isLimited = false,
+				isLimitedUnique = false,
+				maxCopies = null,
+				name = details.name,
+				offsaleDeadline = null,
+				packageAssetIds = string.Join(",", ids.Select(c => c.ToString())),
+			});
+
+			if (IdleAssetId.HasValue)
+			{
+			_ = Task.Run(async () =>
+			{
+                await Task.Delay(TimeSpan.FromSeconds(10));
+                
+                var idleThumb = await db.QuerySingleOrDefaultAsync<dynamic>(
+                    "SELECT content_url FROM asset_thumbnail WHERE asset_id = :asset_id",
+                    new { asset_id = IdleAssetId.Value });
+				
+				if (idleThumb != null && idleThumb.content_url != null)
+				{
+					BundleThumbHash = idleThumb.content_url;
+					var LatestBundlever = await services.assets.GetLatestAssetVersion(bundle.assetId);
+					
+					var existingThumb = await db.QuerySingleOrDefaultAsync<dynamic>(
+						"SELECT asset_id FROM asset_thumbnail WHERE asset_id = :asset_id",
+						new { asset_id = bundle.assetId });
+
+					if (existingThumb != null)
+					{
+						await db.ExecuteAsync(
+							"UPDATE asset_thumbnail SET content_url = :content_url, asset_version_id = :asset_version_id, updated_at = NOW() WHERE asset_id = :asset_id",
+							new
+							{
+								asset_id = bundle.assetId,
+								asset_version_id = LatestBundlever.assetVersionId,
+								content_url = BundleThumbHash
+							});
+					}
+					else
+					{
+						await db.ExecuteAsync(
+							"INSERT INTO asset_thumbnail (asset_id, asset_version_id, content_url, created_at, updated_at, moderation_status) " +
+							"VALUES (:asset_id, :asset_version_id, :content_url, NOW(), NOW(), :moderation_status)",
+							new
+							{
+								asset_id = bundle.assetId,
+								asset_version_id = LatestBundlever.assetVersionId,
+								content_url = BundleThumbHash,
+								moderation_status = (int)ModerationStatus.ReviewApproved
+							});
+					}
+					
+					Console.WriteLine($"Set bundle thumbnail to IdleAnimation thumbnail");
+				}
+			});
+		}
+		
+		return bundle;
+	}
+
+	private Type MapAnimType(string RBXtype)
+	{
+		if (string.IsNullOrEmpty(RBXtype))
+			return Type.Animation;
+		
+		var Types = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+		{
+			"Animation",
+			"ClimbAnimation",
+			"FallAnimation", 
+			"IdleAnimation",
+			"JumpAnimation",
+			"RunAnimation",
+			"SwimAnimation",
+			"WalkAnimation",
+			"PoseAnimation",
+		};
+		
+		return Types.Contains(RBXtype) ? Type.Animation : Type.Animation;
+	}
+
+	private async Task DownloadAndSetAnimThumb(long robloxAssetId, long siteAssetId)
+	{
+		try
+		{
+			var ThumbReq = new[]
+			{
+				new
+				{
+					requestId = $"{robloxAssetId}::Asset:420x420:Png:regular:",
+					type = "Asset",
+					targetId = robloxAssetId,
+					token = "",
+					format = "Png",
+					size = "420x420",
+					version = ""
+				}
+			};
+
+			using var client = new HttpClient();
+			client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36");
+			client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+			client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en-US,en;q=0.9");
+        
+			var response = await client.PostAsync("https://thumbnails.roblox.com/v1/batch",
+				new StringContent(JsonConvert.SerializeObject(ThumbReq), 
+				System.Text.Encoding.UTF8, "application/json"));
+			
+			if (!response.IsSuccessStatusCode)
+			{
+				var err = await response.Content.ReadAsStringAsync();
+				Console.WriteLine($"thumb API error for {robloxAssetId}:");
+				Console.WriteLine($"code: {response.StatusCode}");
+				Console.WriteLine($"response: {err}");
+				throw new Exception($"thumb API returned {response.StatusCode}: {err}");
+			}
+			
+			var content = await response.Content.ReadAsStringAsync();
+			var ThumbnailRes = JsonConvert.DeserializeObject<RobloxThumbnailBatchResponse>(content);
+			
+			if (ThumbnailRes?.data == null || ThumbnailRes.data.Length == 0)
+				throw new Exception("No thumb data received or bad response");
+			
+			var ThumbData = ThumbnailRes.data[0];
+			if (ThumbData.state != "Completed" || string.IsNullOrEmpty(ThumbData.imageUrl))
+				throw new Exception($"Thumbnail not available: {ThumbData.errorMessage}");
+			
+			var ImageRes = await client.GetAsync(ThumbData.imageUrl);
+			ImageRes.EnsureSuccessStatusCode();
+			
+			using var Stream = await ImageRes.Content.ReadAsStreamAsync();
+			
+			// get hash
+			using var sha256 = SHA256.Create();
+			var hashBytes = await sha256.ComputeHashAsync(Stream);
+			var hash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+			
+			var Thumbpath = Path.Combine(Configuration.ThumbnailsDirectory, hash + ".png");
+			Stream.Position = 0;
+			
+			using (var FStream = System.IO.File.Create(Thumbpath))
+			{
+				await Stream.CopyToAsync(FStream);
+			}
+
+			var latestVersion = await services.assets.GetLatestAssetVersion(siteAssetId);
+			
+			var existingThumb = await db.QuerySingleOrDefaultAsync<dynamic>(
+				"SELECT asset_id FROM asset_thumbnail WHERE asset_id = :asset_id",
+				new { asset_id = siteAssetId });
+
+			if (existingThumb != null)
+			{
+				await db.ExecuteAsync(
+					"UPDATE asset_thumbnail SET content_url = :content_url, asset_version_id = :asset_version_id, updated_at = NOW() WHERE asset_id = :asset_id",
+					new
+					{
+						asset_id = siteAssetId,
+						content_url = hash,
+						asset_version_id = latestVersion.assetId
+					});
+			}
+			else
+			{
+				await db.ExecuteAsync(
+					"INSERT INTO asset_thumbnail (asset_id, asset_version_id, content_url, created_at, updated_at, moderation_status) " +
+					"VALUES (:asset_id, :asset_version_id, :content_url, NOW(), NOW(), :moderation_status)",
+					new
+					{
+						asset_id = siteAssetId,
+						asset_version_id = latestVersion.assetId,
+						content_url = hash,
+						moderation_status = (int)ModerationStatus.ReviewApproved
+					});
+			}
+			
+			Console.WriteLine($"Successfully set thumbnail for asset {siteAssetId} from Roblox asset {robloxAssetId}");
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"Failed to download thumbnail for animation {robloxAssetId}: {ex.Message}");
+		}
+	}
 
     [HttpPost("asset/copy-from-roblox"), StaffFilter(Access.CreateAssetCopiedFromRoblox)]
     public async Task<dynamic> CopyAssetFromRoblox([Required, FromBody] CopyAssetRequest request)
@@ -2820,6 +3090,7 @@ Thank you for your understanding,
             Type.ShoulderAccessory,
             Type.FaceAccessory,
             Type.Head,
+			Type.EmoteAnimation
         };
         if (details.AssetTypeId == null || !allowedTypes.Contains(details.AssetTypeId.Value))
             throw new StaffException("Cannot copy this assetType: " + details.AssetTypeId);
@@ -2858,6 +3129,23 @@ Thank you for your understanding,
         var assetDetails = await services.assets.CreateAsset(details.Name, details.Description, 1,
             CreatorType.User, 1, content, details.AssetTypeId.Value, Genre.All, ModerationStatus.ReviewApproved,
             DateTime.UtcNow, DateTime.UtcNow, request.assetId);
+			
+		if (details.AssetTypeId == Type.EmoteAnimation)
+		{
+			_ = Task.Run(async () =>
+			{
+				try
+				{
+					await Task.Delay(TimeSpan.FromSeconds(2));
+					await DownloadAndSetAnimThumb(request.assetId, assetDetails.assetId);
+				}
+				catch (Exception ex)
+				{
+					Writer.Info(LogGroup.AdminApi, $"failed to set emote thumb for {assetDetails.assetId}: {ex}");
+				}
+			});
+		}
+	
         await db.ExecuteAsync("INSERT INTO moderation_migrate_asset(asset_id, roblox_asset_id, actor_id) VALUES (@assetId, @robloxAssetId, @actorId)",
             new
             {
@@ -2905,7 +3193,7 @@ Thank you for your understanding,
 				result[type]++;
 			}
 
-			var optionalOneOf = new List<Type>() {Type.LeftArm, Type.LeftLeg, Type.RightLeg, Type.RightArm, Type.Torso, Type.Head, Type.Gear, Type.Shirt, Type.Pants, Type.Face};
+			var optionalOneOf = new List<Type>() {Type.LeftArm, Type.LeftLeg, Type.RightLeg, Type.RightArm, Type.Torso, Type.Head, Type.Gear, Type.Shirt, Type.Pants, Type.Face, Type.ClimbAnimation, Type.FallAnimation, Type.IdleAnimation, Type.JumpAnimation, Type.RunAnimation, Type.SwimAnimation, Type.WalkAnimation};
 			var optionalCanHaveMoreThanOne = new List<Type>() {Type.Hat, Type.HairAccessory, Type.ShoulderAccessory, Type.BackAccessory, Type.FrontAccessory, Type.WaistAccessory, Type.NeckAccessory};
 
 			foreach (var type in optionalOneOf)
@@ -3295,7 +3583,8 @@ Thank you for your understanding,
 	// TODO: does this already exist? idk but it's easier so i don't care
 	private async Task<string> DownloadRobloxAsset(long assetId, string outPath)
 	{
-		var assetendpoint = $"{Configuration.GSUrl}/asset/roblox/?id={assetId}";
+		//var assetendpoint = $"{Configuration.GSUrl}/asset/roblox/?id={assetId}";
+		var assetendpoint = $"{Configuration.GSUrl}/asset?id={assetId}";
 		
 		using var client = new HttpClient();
 		var response = await client.GetAsync(assetendpoint);
@@ -3390,7 +3679,8 @@ Thank you for your understanding,
 	private async Task<RBXAssetDetails> GetRBXAssetInfo(long assetId)
 	{
 		using var client = new HttpClient();
-		var response = await client.GetAsync($"https://economy.roblox.com/v2/assets/{assetId}/details");
+		//var response = await client.GetAsync($"https://economy.roblox.com/v2/assets/{assetId}/details");
+		var response = await client.GetAsync($"https://economy.roproxy.com/v2/assets/{assetId}/details");
 		response.EnsureSuccessStatusCode();
 		
 		var content = await response.Content.ReadAsStringAsync();

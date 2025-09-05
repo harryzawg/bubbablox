@@ -11,6 +11,13 @@ using System.Text.Json;
 
 namespace Roblox.Website.Controllers;
 
+// add this to dto later plz
+public class Set2020MenuPreferenceReq
+{
+    [Required]
+    public bool Enabled { get; set; }
+}
+
 [ApiController]
 [Route("/apisite/users/v1")]
 public class UsersControllerV1 : ControllerBase
@@ -143,5 +150,43 @@ public class UsersControllerV1 : ControllerBase
             data = entries,
         };
     }
+	
+	[HttpGet("user/get-2020-menu")]
+	public async Task<dynamic> Get2020MenuPreference()
+	{
+		if (userSession is null) throw new UnauthorizedException();
+
+		try
+		{
+			var preference = await services.users.Get2020MenuPref(userSession.userId);
+			return new
+			{
+				enabled = preference,
+			};
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"error getting 2020 menu pref for user {userSession.userId}:");
+			Console.WriteLine(ex.ToString());
+			throw new RobloxException(500, 0, "Internal server error");
+		}
+	}
+
+	[HttpPatch("user/2020-menu")]
+	public async Task Set2020MenuPreference([Required, FromBody] Set2020MenuPreferenceReq request)
+	{
+		if (userSession is null) throw new UnauthorizedException();
+
+		try
+		{
+			await services.users.Set2020MenuPref(userSession.userId, request.Enabled);
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"error setting 2020 menu prefe for user {userSession.userId}:");
+			Console.WriteLine(ex.ToString());
+			throw new RobloxException(500, 0, "Internal server error");
+		}
+	}
 }
 

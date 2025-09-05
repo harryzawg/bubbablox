@@ -9,10 +9,8 @@ namespace Roblox.Models.Assets
     public enum Type
     {
         Image = 1,
-
         TeeShirt = 2,
         TShirt = 2,
-
         Audio = 3,
         Mesh = 4,
         Lua = 5,
@@ -53,9 +51,7 @@ namespace Roblox.Models.Assets
         SwimAnimation = 54,
         WalkAnimation = 55,
         PoseAnimation = 56,
-        
-        
-        
+		EmoteAnimation = 61,
         Special = 500,
     }
 

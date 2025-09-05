@@ -82,3 +82,37 @@ export const setPlayable = async ({universeId, isPlayable}) => {
     isPlayable,
   });
 }
+
+export const get2020Menu = async () => {
+  try {
+    const response = await request('GET', getFullUrl('users', '/v1/user/get-2020-menu'));
+    return response.data;
+  } catch (error) {
+    console.error('failed to get 2020 menu pref:', error);
+    throw error;
+  }
+}
+
+export const set2020Menu = async ({ enabled }) => {
+  try {
+    const response = await request('PATCH', getFullUrl('users', '/v1/users/2020-menu'), {
+      enabled,
+    });
+    return response.data;
+  } catch (error) {
+    console.error('failed to set 2020 menu pref:', error);
+    throw error;
+  }
+}
+
+export const setPlaceYear = async ({ universeId, year }) => {
+  try {
+    const response = await request('PATCH', getFullUrl('develop', `/v1/universes/${universeId}/year`), {
+      year,
+    });
+    return response.data;
+  } catch (error) {
+    console.error('failed to set place year:', error);
+    throw error;
+  }
+}

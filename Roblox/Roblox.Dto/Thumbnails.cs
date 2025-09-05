@@ -9,6 +9,7 @@ public class ThumbnailEntry
     public long targetId { get; set; }
     public ThumbnailState state { get; set; }
     public string? imageUrl { get; set; }
+    public string version { get; set; } = "TN3";
 }
 
 public class AssetThumbnailEntryDb

@@ -249,6 +249,13 @@ public class UsersService : ServiceBase, IService
         if (result == null || result.userId == 0) throw new RecordNotFoundException();
         return result.userId;
     }
+	
+	public async Task<UserInfo> GetUserByName(string username)
+    {
+        var res = await db.QuerySingleOrDefaultAsync<UserInfo>("SELECT id as userId, username, status as accountStatus, created_at as created, description FROM \"user\" WHERE username = :name", new { name = username });
+        if (res == null) throw new RecordNotFoundException();
+        return res;
+    }
 
     public async Task<bool> IsBadUsername(string usernameToCheck)
     {
@@ -639,6 +646,17 @@ public class UsersService : ServiceBase, IService
             requestedName = c.requestedUsername ?? c.username,
         });
     }
+	
+	public async Task<bool> Get2020MenuPref(long userId) 
+	{ 	var result = await db.QuerySingleOrDefaultAsync<int?>( "SELECT \"2020_menu_enabled\" FROM user_settings WHERE user_id = @userId", new { userId }); 
+		return result == null || result.Value == 1; 
+	} 
+	
+	public async Task Set2020MenuPref(long userId, bool enabled) 
+	{ 
+		var value = enabled ? 1 : 0; 
+		await db.ExecuteAsync( "INSERT INTO user_settings (user_id, \"2020_menu_enabled\") " + "VALUES (@userId, @value) " + "ON CONFLICT (user_id) DO UPDATE SET \"2020_menu_enabled\" = @value", new { userId, value }); 
+	}
 
     public async Task<StatusEntry> GetUserStatus(long userId)
     {
@@ -1144,8 +1162,12 @@ public class UsersService : ServiceBase, IService
 					}
 					catch (Npgsql.PostgresException ex) when (ex.SqlState == "23505" && retries > 0)
 					{
-						await db.ExecuteAsync(
-							"SELECT setval(pg_get_serial_sequence('user', 'id'), coalesce(max(id), 0) + 1, false FROM \"user\"");
+						await db.ExecuteAsync(@"
+							SELECT setval(
+								pg_get_serial_sequence('user', 'id'),
+								(SELECT coalesce(max(id), 0) + 1 FROM ""user""),
+								false
+							)");
 						await Task.Delay(100 * (3 - retries));
 					}
 				}
@@ -1214,6 +1236,17 @@ public class UsersService : ServiceBase, IService
 				right_leg_color_id = 102,
 				left_leg_color_id = 102,
 				headshot_thumbnail_url = "/images/thumbnails/default_headshot.png" // will be generated
+			});
+			
+			await InsertAsync("user_avatar_type", new
+			{
+				user_id = userId,
+				r15 = false,
+				height = 100,
+				width = 100,
+				head = 100,
+				proportion = 0,
+				body_type = 0,
 			});
 
 			// Give gender-specific assets
@@ -1654,11 +1687,11 @@ public class UsersService : ServiceBase, IService
                 asset_id = assetDetails.assetId,
                 serial = serialNumber,
             });
-            // log.Info("created userAsset id = {0}", userAssetId);
+            log.Info("created userAsset id = {0}", userAssetId);
             // If this is a package, we have to grant assetIds
             if (assetDetails.assetType == Type.Package)
             {
-                // log.Info("this is a package. adding package assets.");
+                log.Info("this is a package. adding package assets.");
                 using var assets = ServiceProvider.GetOrCreate<AssetsService>(this);
                 foreach (var id in await assets.GetPackageAssets(assetId))
                 {
@@ -1671,11 +1704,11 @@ public class UsersService : ServiceBase, IService
                             asset_id = id,
                             serial = (int?)null,
                         });
-                        // log.Info("added assetId {0} to user: {1}", id, packageUserAssetId);
+                        log.Info("added assetId {0} to user: {1}", id, packageUserAssetId);
                     }
                     else
                     {
-                        // log.Info("user already owns an asset from this package: {0}", id);
+                        log.Info("user already owns an asset from this package: {0}", id);
                     }
                 }
             }
