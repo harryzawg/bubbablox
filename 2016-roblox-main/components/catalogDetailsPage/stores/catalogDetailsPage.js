@@ -85,6 +85,7 @@ const CatalogDetailsPage = createContainer(() => {
       if (!seller) return null;
       return {
         assetId: details.id,
+		assetType: details.assetType,
         sellerName: seller.seller.name,
         sellerId: seller.seller.id,
         price: seller.price,
@@ -96,6 +97,7 @@ const CatalogDetailsPage = createContainer(() => {
     } else if (details.isForSale) {
       return {
         assetId: details.id,
+		assetType: details.assetType,
         sellerName: details.creatorName,
         sellerId: details.creatorTargetId,
         price: details.price,

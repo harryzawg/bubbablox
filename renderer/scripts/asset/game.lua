@@ -3,6 +3,7 @@ local jobId = "InsertJobIdHere"
 local mode = "R6"
 local baseURL = "http://localhost"
 local uploadURL = "UPLOAD_URL_HERE"
+local apiKey = "AccessKey";
 local ScriptContext = game:GetService("ScriptContext")
 local Lighting = game:GetService('Lighting')
 local ContentProvider = game:GetService('ContentProvider')
@@ -25,7 +26,7 @@ Players:SetChatFilterUrl(baseURL .. "/Game/ChatFilter.ashx")
 
 print("[debug] loading game...")
 local loadsuccess, loaderr = pcall(function()
-    game:Load('rbxasset://' .. assetId[1] .. '.rbxl')
+    game:Load(url .. "/Asset/?id=" .. assetId[1] .. "&apiKey=" .. apiKey)
 end)
 
 if not loadsuccess then

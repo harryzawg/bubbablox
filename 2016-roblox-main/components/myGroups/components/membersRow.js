@@ -6,6 +6,7 @@ import BcOverlay from "../../bcOverlay";
 import GenericPagination from "../../genericPagination";
 import PlayerImage from "../../playerImage";
 import Link from "../../link";
+import { getUserInfo } from "../../../services/users";
 
 const useStyles = createUseStyles({
   select: {
@@ -63,6 +64,28 @@ const MembersRow = props => {
 
   // conditionals
   const canPaginate = members && (members.nextPageCursor || members.previousPageCursor);
+  
+  // for tick
+  const Username = ({ userId, username }) => {
+	const [isVerified, setIsVerified] = useState(false);
+
+	useEffect(() => {
+	  getUserInfo({ userId })
+		.then(userInfo => {
+		  setIsVerified(userInfo.isVerified || false);
+		})
+		.catch(error => {
+		  console.error('failed to get user info:', error);
+		});
+	}, [userId]);
+
+    return (
+      <p className='mb-0 text-left font-size-14 text-truncate'>
+        {username}
+        {isVerified && <img src="/verified.svg" alt="Verified" style={{width: '16px', height: '16px', marginLeft: '3px'}} />}
+      </p>
+    );
+  };
 
   if (!roles) return null;
   return <div className='row'>
@@ -84,7 +107,7 @@ const MembersRow = props => {
               <Link href={`/users/${v.userId}/profile`}>
                 <a>
                   <PlayerImage id={v.userId} name={v.username} />
-                  <p className='mb-0 text-left font-size-14 text-truncate'>{v.username}</p>
+                  <Username userId={v.userId} username={v.username} />
                 </a>
               </Link>
             </div>

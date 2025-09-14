@@ -229,6 +229,10 @@ namespace Roblox.Dto.Assets
         public bool enableComments { get; set; }
         public ModerationStatus moderationStatus { get; set; }
         public bool is18Plus { get; set; }
+		public long? placeId { get; set; }
+		public string placeName { get; set; }
+		public long? badgePlaceId { get; set; }
+		public long? passPlaceId { get; set; }
     }
 
     public class CreatorEntry
@@ -256,6 +260,8 @@ namespace Roblox.Dto.Assets
         public bool isVersioningEnabled { get; set; }
         public bool isArchivable { get; set; }
         public bool canHaveThumbnail { get; set; }
+		public long? placeId { get; set; }
+		public string placeName { get; set; }
 
         public MultiGetAssetDeveloperDetails(MultiGetAssetDeveloperDetailsDb dbResult)
         {
@@ -274,6 +280,8 @@ namespace Roblox.Dto.Assets
             enableComments = dbResult.enableComments;
             moderationStatus = dbResult.moderationStatus;
             is18Plus = dbResult.is18Plus;
+			placeId = dbResult.placeId;
+			placeName = dbResult.placeName;
         }
     }
     

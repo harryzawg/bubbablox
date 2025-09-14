@@ -7,6 +7,7 @@ public class FriendEntry
     public bool isOnline { get; set; }
     public bool isDeleted { get; set; }
     public bool isBanned { get; set; }
+	public bool isVerified { get; set; }
     public long id { get; set; }
     public string name { get; set; }
     public string displayName { get; set; }
@@ -23,6 +24,7 @@ public class FriendEntryDto
     public string name { get; set; }
     public DateTime online_at { get; set; }
     public AccountStatus status { get; set; }
+	public bool isVerified { get; set; }
 }
 
 public class FriendRequestEntryInternal

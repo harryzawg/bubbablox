@@ -33,10 +33,10 @@ public class GameServerService : ServiceBase
     private static Dictionary<long, long> gamePlayerCounts = new Dictionary<long, long>(); // placeid, playercount
     private static Dictionary<string, Process> jobRccs = new Dictionary<string, Process>(); // jobid, rcc process
     public static Dictionary<string, int> currentGameServerPorts = new Dictionary<string, int>() {}; // networkserver ports, jobid, port
-    private static Dictionary<long, string> currentPlaceIdsInUse = new Dictionary<long, string>(); // placeid, jobid
+    private static Dictionary<long, List<string>> currentPlaceIdsInUse = new Dictionary<long, List<string>>(); // placeid, jobid
     public static Dictionary<long, long> CurrentPlayersInGame = new Dictionary<long, long>() { }; // userid, placeid
     public static Dictionary<Process, int> mainRCCPortsInUse = new Dictionary<Process, int>(); // Process, main RCC soap port
-	private readonly ConcurrentDictionary<string, bool> _serverstatus = new ConcurrentDictionary<string, bool>(); // server status
+	public Dictionary<string, Process> JobRccs => jobRccs;
     public static void Configure(string newJwtKey)
     {
         jwtKey = newJwtKey;
@@ -183,6 +183,24 @@ public class GameServerService : ServiceBase
                     asset_id = placeId,
                 });
             }
+			
+			var CurrentVisits = await db.QueryFirstOrDefaultAsync<long>(
+				"SELECT visit_count FROM asset_place WHERE asset_id = :id", 
+				new { id = placeId });
+				
+			// make thus better
+			using var users = ServiceProvider.GetOrCreate<UsersService>(this);
+			if (CurrentVisits >= 100)
+			{
+				Console.WriteLine("Giving homestead");
+				await users.GiveUserBadge(placeDetails.creatorTargetId, 6); // Homestead
+			}
+			
+			if (CurrentVisits >= 1000)
+			{
+				Console.WriteLine("Giving bricksmith");
+				await users.GiveUserBadge(placeDetails.creatorTargetId, 7); // Bricksmith
+			}
 
             return 0;
         });
@@ -247,114 +265,74 @@ public class GameServerService : ServiceBase
         }
     }
 
-    private async Task<T> PostToGameServer<T>(string ipAddress, string port, string methodName, List<dynamic>? args = null, CancellationToken? cancelToken = null)
-    {
-        var jsonRequest = new
-        {
-            method = methodName,
-            arguments = args ?? new List<dynamic>(),
-        };
-        var content = new StringContent(JsonSerializer.Serialize(jsonRequest));
-        content.Headers.Add("roblox-server-authorization", Configuration.GameServerAuthorization);
-        content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-
-        if (cancelToken == null)
-        {
-            var source = new CancellationTokenSource();
-            source.CancelAfter(TimeSpan.FromSeconds(30));
-            cancelToken = source.Token;
-        }
-
-        var result = await client.PostAsync("http://" + ipAddress + ":" + port + "/api/public-method/", content,
-            cancelToken.Value);
-        if (!result.IsSuccessStatusCode) throw new Exception("Unexpected statusCode: " + result.StatusCode + "\nIP = " + ipAddress + "\nPort = " + port);
-        var response = JsonSerializer.Deserialize<T>(await result.Content.ReadAsStringAsync(cancelToken.Value));
-        if (response == null)
-        {
-            throw new Exception("Null response from PostToGameServer");
-        }
-        return response;
-    }
-
-    public async Task<GameServerInfoResponse?> GetGameServerInfo(string ipAddress, string port)
-    {
-        try
-        {
-            using var cancelToken = new CancellationTokenSource();
-            cancelToken.CancelAfter(TimeSpan.FromSeconds(5));
-            return await PostToGameServer<GameServerInfoResponse>(ipAddress, port, "getStatus", default, cancelToken.Token);
-        }
-        catch (Exception e) when (e is TaskCanceledException or TimeoutException or HttpRequestException)
-        {
-            // TODO: log this somewhere, should not happen
-            return null;
-        }
-    }
-
-    public async Task StartGame(string ipAddress, string port, long placeId, string gameServerId, int gameServerPort)
-    {
-        await PostToGameServer<GameServerEmptyResponse>(ipAddress, port, "startGame",
-            new List<dynamic> {placeId, gameServerId, gameServerPort});
-    }
-
-	public bool IsServerShutDown(string serverId)
-	{
-		return _serverstatus.TryGetValue(serverId, out var isShutDown) && isShutDown;
-	}
-
 	// make this 1 call later
 	public void ShutDownServer(string serverId)
 	{
 		if (string.IsNullOrEmpty(serverId))
 		{
-			Console.WriteLine("[ERROR] serverId is null or empty, cannot shut down");
-			return;
-		}
-
-		if (_serverstatus.TryGetValue(serverId, out var isShutDown) && isShutDown)
-		{
-			Console.WriteLine($"[INFO] server {serverId} is already shut down");
+			Console.WriteLine("[GS] serverId is null or empty, cannot shut down");
 			return;
 		}
 
 		try
 		{
-			Console.WriteLine($"[DEBUG] shutting down server {serverId}");
+			Console.WriteLine($"[GS] shutting down server {serverId}");
 
 			string placeJobId = serverId;
 			long placeId = GetPlaceIdByJobId(serverId);
 			if (placeId == 0)
 			{
-				Console.WriteLine($"[ERROR] could not find placeId for server: {serverId}");
+				Console.WriteLine($"[GS] could not find placeId for server: {serverId}");
 				return;
 			}
 
 			if (!jobRccs.TryGetValue(placeJobId, out Process rccProcess))
 			{
-				Console.WriteLine($"[ERROR] process for server {serverId} not found");
+				Console.WriteLine($"[GS] process for server {serverId} not found");
 				return;
 			}
 
 			if (!rccProcess.HasExited)
 			{
-				Console.WriteLine($"[INFO] killing process for serverId: {serverId}");
+				Console.WriteLine($"[GS] killing process for serverId: {serverId}");
 				rccProcess.Kill();
 			}
 
 			// clean up
-			currentPlaceIdsInUse.Remove(placeId);
+			if (currentPlaceIdsInUse.ContainsKey(placeId))
+			{
+				currentPlaceIdsInUse[placeId].Remove(placeJobId);
+				if (currentPlaceIdsInUse[placeId].Count == 0)
+				{
+					currentPlaceIdsInUse.Remove(placeId);
+				}
+			}
 			currentGameServerPorts.Remove(placeJobId);
 			jobRccs.Remove(placeJobId);
 			mainRCCPortsInUse.Remove(rccProcess);
 			RemoveAllPlayersFromPlaceId(placeId);
-
-			_serverstatus[serverId] = true;
+			
+			Task.Run(async () =>
+			{
+				try
+				{
+					await db.ExecuteAsync("DELETE FROM asset_server WHERE id = :id::uuid", new
+					{
+						id = serverId
+					});
+					Console.WriteLine($"[GS] Deleted server {serverId} from DB");
+				}
+				catch (Exception ex)
+				{
+					Console.WriteLine($"[GS] Failed to delete server from DB {serverId}: {ex.Message}");
+				}
+			});
 			
 			Console.WriteLine($"GS {placeJobId} (place {placeId}) was successfully closed");
 		}
 		catch (Exception ex)
 		{
-			Console.WriteLine($"[ERROR] failed to shutdown {serverId}: {ex.Message}");
+			Console.WriteLine($"[GS] failed to shutdown {serverId}: {ex.Message}");
 			throw;
 		}
 	}
@@ -388,18 +366,17 @@ public class GameServerService : ServiceBase
         return CurrentPlayersInGame[userId];
     }
     
-    public static long GetPlaceIdByJobId(string jobId)
-    {
-        foreach (var kvp in currentPlaceIdsInUse)
-        {
-            if (kvp.Value == jobId)
-            {
-                return kvp.Key;
-            }
-        }
-            
-        return 0; // we never throw exceptions. EVER.
-    }
+	public static long GetPlaceIdByJobId(string jobId)
+	{
+		foreach (var kvp in currentPlaceIdsInUse)
+		{
+			if (kvp.Value.Contains(jobId))
+			{
+				return kvp.Key;
+			}
+		}
+		return 0;
+	}
 
 	public async Task<DateTime> GetLastServerPing(string serverId)
 	{
@@ -410,8 +387,7 @@ public class GameServerService : ServiceBase
 
 		if (result == null || result.updated_at == null)
 		{
-			Console.WriteLine($"[info] No data found for serverId: {serverId}");
-			throw new InvalidOperationException($"No data found for serverId: {serverId}");
+			throw new InvalidOperationException($"No server info found for serverId: {serverId}");
 		}
 
 		return (DateTime)result.updated_at;
@@ -425,259 +401,141 @@ public class GameServerService : ServiceBase
             id = serverId,
         });
     }
+	
+	private async Task<long> GetMaxPlayerCount(long placeId)
+	{	
+		using var gamesService = ServiceProvider.GetOrCreate<GamesService>();
+		return await gamesService.GetMaxPlayerCount(placeId);
+	}
+	
+	private async Task<GameServerEntry> GetAvailableServerDB(long placeId, long MaxPlayers)
+	{
+		return await db.QueryFirstOrDefaultAsync<GameServerEntry>(
+			@"SELECT s.id::text, s.asset_id as assetId, s.port 
+			FROM asset_server s 
+			WHERE s.asset_id = :placeId 
+			AND (
+				SELECT COUNT(*) 
+				FROM asset_server_player p 
+				WHERE p.server_id = s.id
+			) < :MaxPlayers
+			ORDER BY (
+				SELECT COUNT(*) 
+				FROM asset_server_player p 
+				WHERE p.server_id = s.id
+			) ASC
+			LIMIT 1",
+			new
+			{
+				placeId,
+				MaxPlayers
+			});
+	}
+		
+	public async Task<int> GetServerPortFromDatabase(string serverId)
+	{
+		var serverInfo = await db.QueryFirstOrDefaultAsync<GameServerEntry>(
+			"SELECT port FROM asset_server WHERE id = :id::uuid",
+			new { id = serverId });
+		
+		return serverInfo?.port ?? -1;
+	}
 
-    public async Task DeleteGameServer(string serverId)
-    {
-        
-    }
-    
-    private static readonly IEnumerable<int> GameServerPorts = new []
-    {
-        // this must always stay in sync with nginx config file
-        53640, // es1-1
-        53641, // es1-2, etc
-        53642, // 3
-        53643, // 4
-        53644, // 5
-        53645, // 6
-        53646, // 7
-        53647, // 8
-        53648, // 9
-        53649, // 10
-#if false
-        53650,
-        53651,
-        53652,
-        53653,
-        53654,
-        53655,
-#endif
-    };
-    
-    private GameServerPort GetPreferredPortForGameServer(IEnumerable<GameServerMultiRunEntry> runningGames)
-    {
-        var games = runningGames.ToList();
-        var ports = GameServerPorts.ToArray();
-        // Find a port that's not in use
-        int port = 0;
-        int id = 0;
-        for (var i = 0; i < ports.Length; i++)
-        {
-            var portOk = games.Find(c => c.port == ports[i]) == null;
-            if (portOk)
-            {
-                port = ports[i];
-                id = i + 1;
-                break;
-            }
-        }
-        
-        if (port == 0)
-        {
-            throw new Exception("Cannot find a free port for game server");
-        }
+	public async Task<GameServerGetOrCreateResponse> GetServerForPlace(long placeId, string year = "2016")
+	{
+		long MaxPlayers = await GetMaxPlayerCount(placeId);
+		var AvailableServer = await GetAvailableServerDB(placeId, MaxPlayers);
+		
+		if (AvailableServer != null)
+		{
+/* 			if (!currentGameServerPorts.ContainsKey(AvailableServer.id))
+			{
+				currentGameServerPorts[AvailableServer.id] = AvailableServer.port;
+			} */
+			
+			return new GameServerGetOrCreateResponse()
+			{
+				job = AvailableServer.id,
+				status = JoinStatus.Joining
+			};
+		}
+		
+		var ServerCount = await db.QueryFirstOrDefaultAsync<int>(
+			"SELECT COUNT(*) FROM asset_server WHERE asset_id = :placeId AND updated_at > NOW() - INTERVAL '5 minutes'",
+			new { placeId });
+		
+		// server limit of 5 for 1 place cause my server sucks
+		if (ServerCount >= 5)
+		{
+			return new GameServerGetOrCreateResponse() { status = JoinStatus.Waiting };
+		}
+		
+		// create new server
+		string jobId = Guid.NewGuid().ToString();
+		int NSPort = -1;
+		int RCCPort = -1;
+		
+		var RandomNSPort = Configuration.AllowedNetworkPorts.OrderBy(x => Guid.NewGuid());
+		foreach (var port in RandomNSPort)
+		{
+			//if (IsPortAvailable(port) && !currentGameServerPorts.Values.Contains(port))
+			if (IsPortAvailableTCP(port))
+			{
+				NSPort = port;
+				break;
+			}
+		}
 
-        return new GameServerPort(port, id);
-    }
+		if (NSPort == -1)
+		{
+			return new GameServerGetOrCreateResponse() { status = JoinStatus.Waiting };
+		}
+		var random = new Random();
+		for (int i = 0; i < 10; i++)
+		{
+			int RCCRandomPort = random.Next(50000, 60001);
+			//if (IsPortAvailable(RCCRandomPort) && !mainRCCPortsInUse.Values.Contains(RCCRandomPort))
+			if (IsPortAvailableTCP(RCCRandomPort) && !mainRCCPortsInUse.Values.Contains(RCCRandomPort))
+			{
+				RCCPort = RCCRandomPort;
+				break;
+			}
+		}
+		
+		if (NSPort == -1 || RCCPort == -1)
+		{
+			return new GameServerGetOrCreateResponse() { status = JoinStatus.Waiting };
+		}
 
-    private GameServerPort GetPortByPortNumber(int port)
-    {
-        var ports = GameServerPorts.ToArray();
-        for (int i = 0; i < ports.Length; i++)
-        {
-            if (ports[i] == port)
-            {
-                return new GameServerPort(ports[i], i + 1);
-            }
-        }
+		string Start = year switch
+		{
+			"2018" or "2020" => year == "2020" ? 
+				await StartGameServer2020(placeId, RCCPort, NSPort, jobId, 43200, MaxPlayers) : 
+				await StartGameServer2018(placeId, RCCPort, NSPort, jobId, 43200, MaxPlayers),
+			"2017" => await StartGameServer2017(placeId, RCCPort, NSPort, jobId, 43200, MaxPlayers),
+			"2015" => await StartGameServer2015(placeId, RCCPort, NSPort, jobId, 43200, MaxPlayers),
+			_ => await StartGameServer(placeId, RCCPort, NSPort, jobId, 43200, MaxPlayers)
+		};
 
-        throw new ArgumentOutOfRangeException();
-    }
-    
-    public async Task<List<Tuple<GameServerInfoResponse,GameServerConfigEntry>>> GetAllGameServers()
-    {
-        var getServerDataTasks = new List<Task<GameServerInfoResponse?>>();
-        foreach (var entry in Configuration.GameServerIpAddresses)
-        {
-            var data = entry.ip.Split(":");
-            var ip = data[0];
-            var port = data[1];
-            getServerDataTasks.Add(GetGameServerInfo(ip, port));
-        }
+		if (Start != "BAD")
+		{
+			//currentGameServerPorts[jobId] = NSPort;
+			return new GameServerGetOrCreateResponse()
+			{
+				job = jobId,
+				status = JoinStatus.Joining
+			};
+		}
 
-        var getServerDataResults = await Task.WhenAll(getServerDataTasks);
-
-        var serverData =getServerDataResults.Select((c, idx) =>
-                new Tuple<GameServerInfoResponse?, GameServerConfigEntry>(c, Configuration.GameServerIpAddresses.ToArray()[idx]))
-            .Where(v => v.Item1 != null)
-            .ToList();
-        return serverData!;
-    }
-
-    /*private async Task<GameServerGetOrCreateResponse> GetServerForPlaceV2(long placeId)
-    {
-        await using var serverCreationLock = await Cache.redLock.CreateLockAsync("CreateGameServerV1", TimeSpan.FromSeconds(30));
-        if (!serverCreationLock.IsAcquired)
-            return new GameServerGetOrCreateResponse
-            {
-                status = JoinStatus.Waiting,
-            };
-
-        var serverData = await GetAllGameServers();
-
-        long maxPlayerCount;
-        using (var gs = ServiceProvider.GetOrCreate<GamesService>())
-        {
-            maxPlayerCount = await gs.GetMaxPlayerCount(placeId);
-        } 
-        // First, try to see if this game is already running. If it is, we should make the player join that.
-        foreach (var (serverInfo, entry) in serverData)
-        {
-            var runningGames = serverInfo!.data.ToList();
-            var runningPlaces = runningGames.ToArray();
-            if (runningPlaces.Length == 0) continue;
-            foreach (var runningPlace in runningPlaces)
-            {
-#if RELEASE
-                // TODO: move this to bg job or something.
-                // This fixes a bug when the server seems to not be shut down properly - sometimes there will be a
-                // lingering game for hours after the server *should* have been shutdown.
-                // first part, do game servers
-                var serversToDelete = await db.QuerySingleOrDefaultAsync<GameServerWithUpdated>(
-                    "SELECT id::text, asset_id as assetId, created_at as createdAt, updated_at as updatedAt FROM asset_server WHERE id = :id::uuid",
-                    new
-                    {
-                        id = runningPlace.id,
-                    });
-                if (serversToDelete == null ||
-                    serversToDelete.updatedAt <= DateTime.UtcNow.Subtract(TimeSpan.FromMinutes(5)))
-                {
-                    Writer.Info(LogGroup.GameServerJoin, "closing server with id={0} due to it being last updated over 5 minutes ago or not existing. updatedAt={1}", runningPlace.id, serversToDelete?.updatedAt);
-                    var ipPort = entry.ip.Split(":");
-                    Roblox.Metrics.GameMetrics.ReportServerShutdownWithoutDatabaseEntry(entry.ip,
-                        runningPlace.placeId);
-                    // Either server doesn't exist, or the server wasn't deleted when it should have been. release it.
-                    await PostToGameServer<GameServerEmptyResponse>(ipPort[0], ipPort[1], "shutdown", new List<dynamic> { runningPlace.id });
-                    continue; // Don't try to use this server yet.
-                }
-#endif
-                // check if this is the right place
-                if (runningPlace.placeId != placeId)
-                    continue;
-                // check if server has too many players
-                var currentPlayerCount = await GetGameServerPlayers(runningPlace.id);
-                if (currentPlayerCount.Count() >= maxPlayerCount)
-                    continue;
-                // We found a good place! Tell them to join...
-                var joinUrl = GetPortByPortNumber(runningPlace.port).ApplyIdToUrl(entry.domain);
-                Writer.Info(LogGroup.GameServerJoin, "Found a good place! placeId = {0} port = {1} url = {2}", placeId, runningPlace.port, joinUrl);
-                return new()
-                {
-                    status = JoinStatus.Joining,
-                    job = CreateGameServerTicket(placeId, joinUrl),
-                };   
-            }
-        }
-        // Sort by least loaded
-        serverData = serverData.Where(a => a.Item1 != null && a.Item1.data != null).ToList();
-        serverData.Sort((a, b) =>
-        {
-            var cOne = a.Item1!.data.Count();
-            var cTwo = b.Item1!.data.Count();
-            return cOne > cTwo ? 1 : cOne == cTwo ? 0 : -1;
-        });
-        Writer.Info(LogGroup.GameServerJoin, "Least loaded server is {0} with {1} games running", serverData[0].Item2.ip, serverData[0].Item1!.data.Count());
-        foreach (var (serverInfo, entry) in serverData)
-        {
-            var data = entry.ip.Split(":");
-            var ip = data[0];
-            var port = data[1];
-            var runningCount = serverInfo!.data.Count();
-            if (runningCount >= entry.maxServerCount)
-            {
-                Writer.Info(LogGroup.GameServerJoin, "cannot start server on {0} since it has too many games running ({1} vs {2})", entry.ip, runningCount, entry.maxServerCount);
-                continue;
-            }
-            // Create the server
-            var id = Guid.NewGuid().ToString();
-            var gamePort = GetPreferredPortForGameServer(serverInfo.data);
-            await db.ExecuteAsync(
-                "INSERT INTO asset_server (id, asset_id, ip, port, server_connection) VALUES (:id::uuid, :asset_id, :ip, :port, :server_connection)",
-                new
-                {
-                    id,
-                    asset_id = placeId,
-                    ip,
-                    gamePort.port,
-                    server_connection = entry.ip, // ip:port
-                });
-            try
-            {
-                var watch = new Stopwatch();
-                watch.Start();
-                await StartGame(ip, port, placeId, id, gamePort.port);
-                watch.Stop();
-                GameMetrics.ReportTimeToStartGameServer(ip, port, watch.ElapsedMilliseconds);
-            }
-            catch (Exception e)
-            {
-                await db.ExecuteAsync("DELETE FROM asset_server WHERE id = :id::uuid", new {id});
-                throw new Exception("Cannot start game server", e);
-            }
-
-            Writer.Info(LogGroup.GameServerJoin, "Created server for {0} at {1}:{2}. Join url = {3}", placeId, entry.domain, gamePort.port, gamePort.ApplyIdToUrl(entry.domain));
-
-            return new()
-            {
-                status = JoinStatus.Joining,
-                job = CreateGameServerTicket(placeId, gamePort.ApplyIdToUrl(entry.domain)),
-            };
-        }
-        
-        // Default
-        return new()
-        {
-            status = JoinStatus.Waiting,
-        };
-    }
-    */
-
-    public async Task<GameServerGetOrCreateResponse> GetServerForPlace(long placeId)
-    {
-        string jobId = Guid.NewGuid().ToString();
-
-        int mainRCCPort = RandomComponent.Next(30000, 40000);
-		// not used but startgameserver still accepts it so keep it here ig
-        int networkServerPort = RandomComponent.Next(50000, 60000);
-        string StartGameInfo;
-        
-        if (currentPlaceIdsInUse.ContainsKey(placeId)!)
-        {
-            jobId = currentPlaceIdsInUse[placeId];
-            StartGameInfo = "OK";
-        }
-        else
-        {
-            StartGameInfo = await StartGameServer(placeId, mainRCCPort, networkServerPort, jobId, 43200);
-        }
-
-        return StartGameInfo != "BAD"
-            ? new GameServerGetOrCreateResponse()
-            {
-                job = jobId,
-                status = JoinStatus.Joining
-            }
-            : new GameServerGetOrCreateResponse()
-            {
-                status = JoinStatus.Waiting
-            };
-    }
+		return new GameServerGetOrCreateResponse() { status = JoinStatus.Waiting };
+	}
 
 	// TODO: MAKE this configurable
 	//private static readonly int[] AllowedNetworkPorts = { 50, 51, 52, 54, 55, 56, 57 };
 			
-	public async Task<string> StartGameServer(long placeId, int RCCPort, int networkServerPort, string jobId, int JobExpiration)
+	public async Task<string> StartGameServer(long placeId, int RCCPort, int NSPort, string jobId, int JobExpiration, long MaxPlayers)
 	{
+		//Console.WriteLine($"starting 2016 place {jobId} on id {placeId} with RCC port: {RCCPort}, NS port: {NSPort}");
 		// Before we waste our time, check if the place exists
 		AssetsService assetsService = new AssetsService();
 		GamesService gamesService = new GamesService();
@@ -687,21 +545,19 @@ public class GameServerService : ServiceBase
 		{
 			return "BAD";
 		}
-		Console.WriteLine($"[DEBUG] current GS ports: {string.Join(",", currentGameServerPorts.Select(kvp => $"{kvp.Key}:{kvp.Value}"))}");
-		int selectedNetworkPort = -1;
-		foreach (int port in Configuration.AllowedNetworkPorts.OrderBy(x => RandomComponent.Next()))
-		{
-			if (IsPortAvailable(port))
+		
+		await db.ExecuteAsync(
+			"INSERT INTO asset_server (id, asset_id, ip, port, RCCConnection) VALUES (:id::uuid, :asset_id, :ip, :port, :RCCConnection)",
+			new
 			{
-				selectedNetworkPort = port;
-				break;
-			}
-		}
+				id = jobId,
+				asset_id = placeId,
+				ip = "games.zawg.ca",
+				port = NSPort,
+				RCCConnection = $"127.0.0.1:{RCCPort}",
+			});
 
-		if (selectedNetworkPort == -1)
-		{
-			return "NO_AVAILABLE_PORTS";
-		}
+		Console.WriteLine($"[DEBUG] current GS ports: {string.Join(",", currentGameServerPorts.Select(kvp => $"{kvp.Key}:{kvp.Value}"))}");
 
 		Process rccServer = new Process();
 		rccServer.StartInfo.CreateNoWindow = false;
@@ -715,9 +571,10 @@ public class GameServerService : ServiceBase
 
 		string originalScript = File.ReadAllText($"{Configuration.LuaScriptPath}GameServer.lua");
 		string finalScript = originalScript.Replace
-			("%port%", $"{selectedNetworkPort}").Replace
+			("%port%", $"{NSPort}").Replace
 			("%placeId%", $"{placeId}").Replace
 			("%creatorId%", $"{uni.builderId}").Replace
+			("%apiKey%", $"{Configuration.RccAuthorization}").Replace
 			("_AUTHORIZATION_STRING_", Configuration.GameServerAuthorization);
 
 		string XML = $@"<?xml version=""1.0"" encoding=""utf-8""?>
@@ -745,8 +602,11 @@ public class GameServerService : ServiceBase
 			</soap:Envelope>";
 
 	await SendSoapRequestToRcc($"http://127.0.0.1:{RCCPort}", XML, "OpenJobEx");
-	currentPlaceIdsInUse.Add(placeId, jobId);
-	currentGameServerPorts.Add(jobId, selectedNetworkPort);
+	if (!currentPlaceIdsInUse.ContainsKey(placeId))
+	{
+		currentPlaceIdsInUse[placeId] = new List<string>();
+	}
+	currentPlaceIdsInUse[placeId].Add(jobId);
 	jobRccs.Add(jobId, rccServer);
 	
 	try
@@ -755,7 +615,7 @@ public class GameServerService : ServiceBase
 		{
 			var webhookcont = new
 			{
-				content = $"place {placeId} started with port {selectedNetworkPort} on server {jobId}"
+				content = $"place {placeId} started with port {NSPort} on server {jobId}"
 			};
 			
 			using var httpClient = new HttpClient();
@@ -770,39 +630,8 @@ public class GameServerService : ServiceBase
 
 	return "OK";
 }
-
-    public async Task<GameServerGetOrCreateResponse> GetServerForPlace2015(long placeId)
-    {
-        string jobId = Guid.NewGuid().ToString();
-
-        int mainRCCPort = RandomComponent.Next(30000, 40000);
-		// not used but startgameserver still accepts it so keep it here ig
-        int networkServerPort = RandomComponent.Next(50000, 60000);
-        string StartGameInfo;
-        
-        if (currentPlaceIdsInUse.ContainsKey(placeId)!)
-        {
-            jobId = currentPlaceIdsInUse[placeId];
-            StartGameInfo = "OK";
-        }
-        else
-        {
-            StartGameInfo = await StartGameServer2015(placeId, mainRCCPort, networkServerPort, jobId, 43200);
-        }
-
-        return StartGameInfo != "BAD"
-            ? new GameServerGetOrCreateResponse()
-            {
-                job = jobId,
-                status = JoinStatus.Joining
-            }
-            : new GameServerGetOrCreateResponse()
-            {
-                status = JoinStatus.Waiting
-            };
-    }
 			
-	public async Task<string> StartGameServer2015(long placeId, int RCCPort, int networkServerPort, string jobId, int JobExpiration)
+	public async Task<string> StartGameServer2015(long placeId, int RCCPort, int NSPort, string jobId, int JobExpiration, long MaxPlayers)
 	{
 		// Before we waste our time, check if the place exists
 		AssetsService assetsService = new AssetsService();
@@ -813,22 +642,19 @@ public class GameServerService : ServiceBase
 		{
 			return "BAD";
 		}
-		Console.WriteLine($"[DEBUG] current GS ports: {string.Join(",", currentGameServerPorts.Select(kvp => $"{kvp.Key}:{kvp.Value}"))}");
-		int selectedNetworkPort = -1;
-		foreach (int port in Configuration.AllowedNetworkPorts.OrderBy(x => RandomComponent.Next()))
-		{
-			if (IsPortAvailable(port))
+		
+		await db.ExecuteAsync(
+			"INSERT INTO asset_server (id, asset_id, ip, port, RCCConnection) VALUES (:id::uuid, :asset_id, :ip, :port, :RCCConnection)",
+			new
 			{
-				selectedNetworkPort = port;
-				break;
-			}
-		}
-
-		if (selectedNetworkPort == -1)
-		{
-			// Make this stupid shit better
-			return "NO_AVAILABLE_PORTS";
-		}
+				id = jobId,
+				asset_id = placeId,
+				ip = "games.zawg.ca",
+				port = NSPort,
+				RCCConnection = $"127.0.0.1:{RCCPort}",
+			});
+			
+		Console.WriteLine($"[DEBUG] current GS ports: {string.Join(",", currentGameServerPorts.Select(kvp => $"{kvp.Key}:{kvp.Value}"))}");
 
 		Process rccServer = new Process();
 		rccServer.StartInfo.CreateNoWindow = false;
@@ -842,9 +668,10 @@ public class GameServerService : ServiceBase
 
 		string originalScript = File.ReadAllText($"{Configuration.LuaScriptPath}GameServer.lua");
 		string finalScript = originalScript.Replace
-			("%port%", $"{selectedNetworkPort}").Replace
+			("%port%", $"{NSPort}").Replace
 			("%placeId%", $"{placeId}").Replace
 			("%creatorId%", $"{uni.builderId}").Replace
+			("%apiKey%", $"{Configuration.RccAuthorization}").Replace
 			("_AUTHORIZATION_STRING_", Configuration.GameServerAuthorization);
 
 		string XML = $@"<?xml version=""1.0"" encoding=""utf-8""?>
@@ -873,8 +700,12 @@ public class GameServerService : ServiceBase
 
 	await Task.Delay(5000);
 	await SendSoapRequestToRcc($"http://127.0.0.1:{RCCPort}", XML, "OpenJobEx");
-	currentPlaceIdsInUse.Add(placeId, jobId);
-	currentGameServerPorts.Add(jobId, selectedNetworkPort);
+	if (!currentPlaceIdsInUse.ContainsKey(placeId))
+	{
+		currentPlaceIdsInUse[placeId] = new List<string>();
+	}
+	currentPlaceIdsInUse[placeId].Add(jobId);
+	currentGameServerPorts.Add(jobId, NSPort);
 	jobRccs.Add(jobId, rccServer);
 	
 	try
@@ -883,7 +714,7 @@ public class GameServerService : ServiceBase
 		{
 			var webhookcont = new
 			{
-				content = $"place {placeId} started with port {selectedNetworkPort} on server {jobId}"
+				content = $"place {placeId} started with port {NSPort} on server {jobId}"
 			};
 			
 			using var httpClient = new HttpClient();
@@ -899,38 +730,7 @@ public class GameServerService : ServiceBase
 	return "OK";
 }
 
-	public async Task<GameServerGetOrCreateResponse> GetServerForPlace2017(long placeId)
-	{
-		string jobId = Guid.NewGuid().ToString();
-
-		int mainRCCPort = RandomComponent.Next(30000, 40000);
-		// not used but startgameserver still accepts it so keep it here ig
-		int networkServerPort = RandomComponent.Next(50000, 60000);
-		string StartGameInfo;
-		
-		if (currentPlaceIdsInUse.ContainsKey(placeId)!)
-		{
-			jobId = currentPlaceIdsInUse[placeId];
-			StartGameInfo = "OK";
-		}
-		else
-		{
-			StartGameInfo = await StartGameServer2017(placeId, mainRCCPort, networkServerPort, jobId, 43200);
-		}
-
-		return StartGameInfo != "BAD"
-			? new GameServerGetOrCreateResponse()
-			{
-				job = jobId,
-				status = JoinStatus.Joining
-			}
-			: new GameServerGetOrCreateResponse()
-			{
-				status = JoinStatus.Waiting
-			};
-	}
-
-	public async Task<string> StartGameServer2017(long placeId, int RCCPort, int networkServerPort, string jobId, int JobExpiration)
+	public async Task<string> StartGameServer2017(long placeId, int RCCPort, int NSPort, string jobId, int JobExpiration, long MaxPlayers)
 	{
 		// Before we waste our time, check if the place exists
 		AssetsService assetsService = new AssetsService();
@@ -941,21 +741,19 @@ public class GameServerService : ServiceBase
 		{
 			return "BAD";
 		}
-		Console.WriteLine($"[DEBUG] current GS ports: {string.Join(",", currentGameServerPorts.Select(kvp => $"{kvp.Key}:{kvp.Value}"))}");
-		int selectedNetworkPort = -1;
-		foreach (int port in Configuration.AllowedNetworkPorts.OrderBy(x => RandomComponent.Next()))
-		{
-			if (IsPortAvailable(port))
+		
+		await db.ExecuteAsync(
+			"INSERT INTO asset_server (id, asset_id, ip, port, RCCConnection) VALUES (:id::uuid, :asset_id, :ip, :port, :RCCConnection)",
+			new
 			{
-				selectedNetworkPort = port;
-				break;
-			}
-		}
+				id = jobId,
+				asset_id = placeId,
+				ip = "games.zawg.ca",
+				port = NSPort,
+				RCCConnection = $"127.0.0.1:{RCCPort}",
+			});
 
-		if (selectedNetworkPort == -1)
-		{
-			return "NO_AVAILABLE_PORTS";
-		}
+		Console.WriteLine($"[DEBUG] current GS ports: {string.Join(",", currentGameServerPorts.Select(kvp => $"{kvp.Key}:{kvp.Value}"))}");
 
 		Process rccServer = new Process();
 		rccServer.StartInfo.CreateNoWindow = false;
@@ -969,9 +767,10 @@ public class GameServerService : ServiceBase
 
 		string originalScript = File.ReadAllText($"{Configuration.LuaScriptPath}GameServer.lua");
 		string finalScript = originalScript.Replace
-			("%port%", $"{selectedNetworkPort}").Replace
+			("%port%", $"{NSPort}").Replace
 			("%placeId%", $"{placeId}").Replace
 			("%creatorId%", $"{uni.builderId}").Replace
+			("%apiKey%", $"{Configuration.RccAuthorization}").Replace
 			("_AUTHORIZATION_STRING_", Configuration.GameServerAuthorization);
 
 		string XML = $@"<?xml version=""1.0"" encoding=""utf-8""?>
@@ -998,46 +797,38 @@ public class GameServerService : ServiceBase
 				</soap:Body>
 			</soap:Envelope>";
 
-	await SendSoapRequestToRcc($"http://127.0.0.1:{RCCPort}", XML, "OpenJobEx");
-	currentPlaceIdsInUse.Add(placeId, jobId);
-	currentGameServerPorts.Add(jobId, selectedNetworkPort);
-	jobRccs.Add(jobId, rccServer);
+		await SendSoapRequestToRcc($"http://127.0.0.1:{RCCPort}", XML, "OpenJobEx");
+		if (!currentPlaceIdsInUse.ContainsKey(placeId))
+		{
+			currentPlaceIdsInUse[placeId] = new List<string>();
+		}
+		currentPlaceIdsInUse[placeId].Add(jobId);
+		currentGameServerPorts.Add(jobId, NSPort);
+		jobRccs.Add(jobId, rccServer);
+		
+		try
+		{
+			if (!string.IsNullOrEmpty(Configuration.Webhook))
+			{
+				var webhookcont = new
+				{
+					content = $"place {placeId} started with port {NSPort} on server {jobId}"
+				};
+				
+				using var httpClient = new HttpClient();
+				var content = new StringContent(JsonSerializer.Serialize(webhookcont), Encoding.UTF8, "application/json");
+				await httpClient.PostAsync(Configuration.Webhook, content);
+			}
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"failed to send to webhook (did you configure it?): {ex.Message}");
+		}
 
 		return "OK";
 	}
 
-	public async Task<GameServerGetOrCreateResponse> GetServerForPlace2018(long placeId)
-	{
-		string jobId = Guid.NewGuid().ToString();
-
-		int mainRCCPort = RandomComponent.Next(30000, 40000);
-		// not used but startgameserver still accepts it so keep it here ig
-		int networkServerPort = RandomComponent.Next(50000, 60000);
-		string StartGameInfo;
-		
-		if (currentPlaceIdsInUse.ContainsKey(placeId)!)
-		{
-			jobId = currentPlaceIdsInUse[placeId];
-			StartGameInfo = "OK";
-		}
-		else
-		{
-			StartGameInfo = await StartGameServer2018(placeId, mainRCCPort, networkServerPort, jobId, 43200);
-		}
-
-		return StartGameInfo != "BAD"
-			? new GameServerGetOrCreateResponse()
-			{
-				job = jobId,
-				status = JoinStatus.Joining
-			}
-			: new GameServerGetOrCreateResponse()
-			{
-				status = JoinStatus.Waiting
-			};
-	}
-
-	public async Task<string> StartGameServer2018(long placeId, int RCCPort, int networkServerPort, string jobId, int JobExpiration)
+	public async Task<string> StartGameServer2018(long placeId, int RCCPort, int NSPort, string jobId, int JobExpiration, long MaxPlayers)
 	{
 		// Before we waste our time, check if the place exists
 		AssetsService assetsService = new AssetsService();
@@ -1048,21 +839,19 @@ public class GameServerService : ServiceBase
 		{
 			return "BAD";
 		}
-		Console.WriteLine($"[DEBUG] current GS ports: {string.Join(",", currentGameServerPorts.Select(kvp => $"{kvp.Key}:{kvp.Value}"))}");
-		int selectedNetworkPort = -1;
-		foreach (int port in Configuration.AllowedNetworkPorts.OrderBy(x => RandomComponent.Next()))
-		{
-			if (IsPortAvailable(port))
+		
+		await db.ExecuteAsync(
+			"INSERT INTO asset_server (id, asset_id, ip, port, RCCConnection) VALUES (:id::uuid, :asset_id, :ip, :port, :RCCConnection)",
+			new
 			{
-				selectedNetworkPort = port;
-				break;
-			}
-		}
+				id = jobId,
+				asset_id = placeId,
+				ip = "games.zawg.ca",
+				port = NSPort,
+				RCCConnection = $"127.0.0.1:{RCCPort}",
+			});
 
-		if (selectedNetworkPort == -1)
-		{
-			return "NO_AVAILABLE_PORTS";
-		}
+		Console.WriteLine($"[DEBUG] current GS ports: {string.Join(",", currentGameServerPorts.Select(kvp => $"{kvp.Key}:{kvp.Value}"))}");
 
 		Process rccServer = new Process();
 		rccServer.StartInfo.CreateNoWindow = false;
@@ -1089,7 +878,7 @@ public class GameServerService : ServiceBase
 				""GameId"": ""{jobId}"",
 				""MachineAddress"": ""games.zawg.ca"",
 				""GsmInterval"": 5,
-				""MaxPlayers"": 10,
+				""MaxPlayers"": {MaxPlayers},
 				""MaxGameInstances"": 1,
 				""ApiKey"": ""HIGu"",
 				""PreferredPlayerCapacity"": 10,
@@ -1104,7 +893,7 @@ public class GameServerService : ServiceBase
 				""BaseUrl"": ""{Configuration.BaseUrl}"",
 				""JobId"": ""{jobId}"",
 				""script"": ""print('RCC Init')"",
-				""PreferredPort"": {selectedNetworkPort}
+				""PreferredPort"": {NSPort}
 			}},
 			""Arguments"": {{}}
 		}}";
@@ -1143,9 +932,31 @@ public class GameServerService : ServiceBase
 
 		try
 		{
-			currentPlaceIdsInUse.Add(placeId, jobId);
-			currentGameServerPorts.Add(jobId, selectedNetworkPort);
+			if (!currentPlaceIdsInUse.ContainsKey(placeId))
+			{
+				currentPlaceIdsInUse[placeId] = new List<string>();
+			}
+			currentPlaceIdsInUse[placeId].Add(jobId);
+			currentGameServerPorts.Add(jobId, NSPort);
 			jobRccs.Add(jobId, rccServer);
+			try
+			{
+				if (!string.IsNullOrEmpty(Configuration.Webhook))
+				{
+					var webhookcont = new
+					{
+						content = $"place {placeId} started with port {NSPort} on server {jobId}"
+					};
+					
+					using var httpClient = new HttpClient();
+					var content = new StringContent(JsonSerializer.Serialize(webhookcont), Encoding.UTF8, "application/json");
+					await httpClient.PostAsync(Configuration.Webhook, content);
+				}
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"failed to send to webhook (did you configure it?): {ex.Message}");
+			}
 		}
 		catch (ArgumentException)
 		{
@@ -1155,38 +966,7 @@ public class GameServerService : ServiceBase
 		return "OK";
 	}
 	
-	public async Task<GameServerGetOrCreateResponse> GetServerForPlace2020(long placeId)
-	{
-		string jobId = Guid.NewGuid().ToString();
-
-		int mainRCCPort = RandomComponent.Next(30000, 40000);
-		// not used but startgameserver still accepts it so keep it here ig
-		int networkServerPort = RandomComponent.Next(50000, 60000);
-		string StartGameInfo;
-		
-		if (currentPlaceIdsInUse.ContainsKey(placeId)!)
-		{
-			jobId = currentPlaceIdsInUse[placeId];
-			StartGameInfo = "OK";
-		}
-		else
-		{
-			StartGameInfo = await StartGameServer2020(placeId, mainRCCPort, networkServerPort, jobId, 43200);
-		}
-
-		return StartGameInfo != "BAD"
-			? new GameServerGetOrCreateResponse()
-			{
-				job = jobId,
-				status = JoinStatus.Joining
-			}
-			: new GameServerGetOrCreateResponse()
-			{
-				status = JoinStatus.Waiting
-			};
-	}
-
-	public async Task<string> StartGameServer2020(long placeId, int RCCPort, int networkServerPort, string jobId, int JobExpiration)
+	public async Task<string> StartGameServer2020(long placeId, int RCCPort, int NSPort, string jobId, int JobExpiration, long MaxPlayers)
 	{
 		// Before we waste our time, check if the place exists
 		AssetsService assetsService = new AssetsService();
@@ -1197,21 +977,19 @@ public class GameServerService : ServiceBase
 		{
 			return "BAD";
 		}
-		Console.WriteLine($"[DEBUG] current GS ports: {string.Join(",", currentGameServerPorts.Select(kvp => $"{kvp.Key}:{kvp.Value}"))}");
-		int selectedNetworkPort = -1;
-		foreach (int port in Configuration.AllowedNetworkPorts.OrderBy(x => RandomComponent.Next()))
-		{
-			if (IsPortAvailable(port))
+		
+		await db.ExecuteAsync(
+			"INSERT INTO asset_server (id, asset_id, ip, port, RCCConnection) VALUES (:id::uuid, :asset_id, :ip, :port, :RCCConnection)",
+			new
 			{
-				selectedNetworkPort = port;
-				break;
-			}
-		}
+				id = jobId,
+				asset_id = placeId,
+				ip = "games.zawg.ca",
+				port = NSPort,
+				RCCConnection = $"127.0.0.1:{RCCPort}",
+			});
 
-		if (selectedNetworkPort == -1)
-		{
-			return "NO_AVAILABLE_PORTS";
-		}
+		Console.WriteLine($"[DEBUG] current GS ports: {string.Join(",", currentGameServerPorts.Select(kvp => $"{kvp.Key}:{kvp.Value}"))}");
 
 		Process rccServer = new Process();
 		rccServer.StartInfo.CreateNoWindow = false;
@@ -1237,7 +1015,7 @@ public class GameServerService : ServiceBase
 				""GameId"": ""{jobId}"",
 				""MachineAddress"": ""games.zawg.ca"",
 				""GsmInterval"": 5,
-				""MaxPlayers"": 10,
+				""MaxPlayers"": {MaxPlayers},
 				""MaxGameInstances"": 1,
 				""ApiKey"": ""HIGu"",
 				""PreferredPlayerCapacity"": 10,
@@ -1252,7 +1030,7 @@ public class GameServerService : ServiceBase
 				""BaseUrl"": ""{Configuration.BaseUrl}"",
 				""JobId"": ""{jobId}"",
 				""script"": ""print('RCC Init')"",
-				""PreferredPort"": {selectedNetworkPort}
+				""PreferredPort"": {NSPort}
 			}},
 			""Arguments"": {{}}
 		}}";
@@ -1291,9 +1069,31 @@ public class GameServerService : ServiceBase
 
 		try
 		{
-			currentPlaceIdsInUse.Add(placeId, jobId);
-			currentGameServerPorts.Add(jobId, selectedNetworkPort);
+			if (!currentPlaceIdsInUse.ContainsKey(placeId))
+			{
+				currentPlaceIdsInUse[placeId] = new List<string>();
+			}
+			currentPlaceIdsInUse[placeId].Add(jobId);
+			currentGameServerPorts.Add(jobId, NSPort);
 			jobRccs.Add(jobId, rccServer);
+			try
+			{
+				if (!string.IsNullOrEmpty(Configuration.Webhook))
+				{
+					var webhookcont = new
+					{
+						content = $"place {placeId} started with port {NSPort} on server {jobId}"
+					};
+					
+					using var httpClient = new HttpClient();
+					var content = new StringContent(JsonSerializer.Serialize(webhookcont), Encoding.UTF8, "application/json");
+					await httpClient.PostAsync(Configuration.Webhook, content);
+				}
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"failed to send to webhook (did you configure it?): {ex.Message}");
+			}
 		}
 		catch (ArgumentException)
 		{
@@ -1341,6 +1141,28 @@ public class GameServerService : ServiceBase
 			return false;
 		}
 	}
+	
+	private bool IsPortAvailableTCP(int port)
+	{
+		if (port < 1 || port > 65535)
+			return false;
+
+		try
+		{
+			var listener = new TcpListener(IPAddress.Any, port);
+			listener.Start();
+			listener.Stop();
+			return true;
+		}
+		catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AddressAlreadyInUse)
+		{
+			return false;
+		}
+		catch (Exception)
+		{
+			return false;
+		}
+	}
     
 	public static async Task<bool> SendSoapRequestToRcc(string URL, string XML, string SOAPAction, int maxRetries = 3)
 	{
@@ -1354,38 +1176,32 @@ public class GameServerService : ServiceBase
 				
 				try
 				{
-					Console.WriteLine($"[RCC] Attempt {attempt}: Sending request to {URL}");
+					Console.WriteLine($"[RCC] attempt {attempt}");
 					HttpResponseMessage RccHttpClientPost = await RccHttpClient.PostAsync(URL, XMLContent);
 					string RccHttpClientResponse = await RccHttpClientPost.Content.ReadAsStringAsync();
 					
-					Console.WriteLine($"[RCC] Response Status: {RccHttpClientPost.StatusCode}");
-					Console.WriteLine($"[RCC] Response Content: {RccHttpClientResponse}");
-					
 					if (RccHttpClientPost.IsSuccessStatusCode)
 					{
-						Console.WriteLine($"[RCC] Request successful");
+						Console.WriteLine($"[RCC] SOAP req successful");
 						return true;
 					}
 					else
 					{
-						Console.WriteLine($"[RCC] Request failed with status: {RccHttpClientPost.StatusCode}");
-						
-						// Log the XML request for debugging (be careful with sensitive data)
-						Console.WriteLine($"[RCC] Request XML (first 500 chars): {XML.Substring(0, Math.Min(500, XML.Length))}");
+						Console.WriteLine($"[RCC] SOAP req failed: {RccHttpClientPost.StatusCode}");
+
+						Console.WriteLine($"[RCC] SOAP req failed (first 500 chars): {XML.Substring(0, Math.Min(500, XML.Length))}");
 					}
 				}
 				catch (Exception e)
 				{
-					Console.WriteLine($"[RCC] Attempt {attempt} failed: {e.ToString()}");
-					
-					// If this is the last attempt, rethrow the exception
+					Console.WriteLine($"[RCC] attempt {attempt} failed: {e.ToString()}");
+
 					if (attempt == maxRetries)
 					{
-						Console.WriteLine($"[RCC] All attempts failed for {SOAPAction}");
+						Console.WriteLine($"[RCC] Could not send a soap request of {SOAPAction} to RCC");
 						return false;
 					}
-					
-					// Wait before retrying (exponential backoff)
+
 					await Task.Delay(1000 * attempt);
 				}
 			}
@@ -1475,7 +1291,7 @@ public class GameServerService : ServiceBase
 
 	public async Task<IEnumerable<GameServerEntryWithPlayers>> GetGameServers(long placeId, int offset, int? limit = null)
 	{
-		var actualLimit = limit ?? 10;
+		var RealLimit = limit ?? 10;
 
 		var serverIds = (await db.QueryAsync<string>(
 			@"SELECT DISTINCT server_id::text 
@@ -1485,23 +1301,29 @@ public class GameServerService : ServiceBase
 			new
 			{
 				placeId,
-				limit = actualLimit,
+				limit = RealLimit,
 				offset
 			})).ToList();
 
 		var results = new List<GameServerEntryWithPlayers>();
+		var tasks = new List<Task>();
 
 		foreach (var serverId in serverIds)
 		{
-			var players = await GetGameServerPlayers(serverId);
-			results.Add(new GameServerEntryWithPlayers
+			var task = Task.Run(async () =>
 			{
-				id = serverId,
-				assetId = placeId,
-				players = players.ToList()
+				var players = await GetGameServerPlayers(serverId);
+				results.Add(new GameServerEntryWithPlayers
+				{
+					id = serverId,
+					assetId = placeId,
+					players = players.ToList()
+				});
 			});
+			tasks.Add(task);
 		}
 
+		await Task.WhenAll(tasks);
 		return results;
 	}
 

@@ -61,9 +61,15 @@ const useSaleCountStyles = createUseStyles({
 const SaleCount = props => {
   const store = CatalogDetailsPage.useContainer();
   const s = useSaleCountStyles();
-  return <p className={'mt-2 mb-2 text-center ' + s.text}>
-    ( <span className='text-black'>{store.saleCount}</span> Sold)
-  </p>
+  const statusText = store.details?.assetType === 21 ? 'Awarded' : 'Sold';
+  console.log('type:', store.details?.assetType);
+  console.log('sales:', store.saleCount);
+  
+  return (
+    <p className={'mt-2 mb-2 text-center ' + s.text}>
+      ( <span className='text-black'>{store.saleCount}</span> {statusText})
+    </p>
+  );
 }
 
 const OwnedCount = props => {

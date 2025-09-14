@@ -81,6 +81,9 @@ public class FrontendProxyMiddleware
         "/game/validateticket.ashx",
         "/game/get-join-script-debug",
         "/games/getgameinstancesjson",
+		"/game/gamepass/gamepasshandler.ashx",
+		"/game/luawebservice/handlesocialrequest.ashx",
+		"/UserCheck/checkifinvalidusernameforsignup",
         "/develop/upload",
         // gs
         "/gs/activity",
@@ -88,17 +91,20 @@ public class FrontendProxyMiddleware
         "/gs/delete",
         "/gs/shutdown",
         "/gs/players/report",
-        "/gs/a",
         "/api/moderation/filtertext",
         // hubs
         "/chat",
         "/chat/negotiate",
     };
 
-    private static HttpClient _httpClient { get; set; } = new(new HttpClientHandler()
-    {
-        AllowAutoRedirect = false,
-    });
+	private static HttpClient _httpClient { get; set; } = new(new HttpClientHandler()
+	{
+		AllowAutoRedirect = false,
+		MaxConnectionsPerServer = 100
+	})
+	{
+		Timeout = TimeSpan.FromSeconds(30)
+	};
 
     private async Task<HttpResponseMessage> ProxyRequestAsync(string url)
     {

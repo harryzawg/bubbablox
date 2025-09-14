@@ -131,6 +131,12 @@ public class ThumbnailsService : ServiceBase, IService
 						? "/images/" + c.contentUrl + ".png" 
 						: null;
 				}
+				else if (c.type == Type.Badge || c.type == Type.GamePass)
+				{
+					final = !string.IsNullOrEmpty(c.thumbnailUrl)
+						? "/images/" + c.thumbnailUrl + ".png"
+						: null;
+				}
 				else if (c.type == Type.Audio)
 				{
 					final = "/img/Audio.png";

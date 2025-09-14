@@ -9,7 +9,6 @@ namespace Roblox.Website.Controllers
         public UsersService users { get; } = new();
         public AccountInformationService accountInformation { get; } = new();
         public AvatarService avatar { get; } = new();
-		public FilterService filter { get; } = new();
         public FriendsService friends { get; } = new();
         public GamesService games { get; } = new();
         public GroupsService groups { get; } = new();
@@ -18,6 +17,7 @@ namespace Roblox.Website.Controllers
         public ThumbnailsService thumbnails { get; } = new();
         public TradesService trades { get; } = new();
         public GameServerService gameServer { get; } = new();
+		public RSASignService rsaSign { get; } = new();
         public ForumsService forums { get; } = new();
         public CurrencyExchangeService currencyExchange { get; } = new();
         public AbuseReportService abuseReport { get; } = new();
@@ -25,5 +25,11 @@ namespace Roblox.Website.Controllers
         public CooldownService cooldown { get; } = new();
         public RobloxApi robloxApi { get; } = new();
         public ChatService chat { get; } = new();
+		public GameJoinService gameJoin { get; }
+
+        public ControllerServices()
+        {
+            gameJoin = new GameJoinService(assets, users, games, avatar, gameServer, rsaSign);
+        }
     }
 }

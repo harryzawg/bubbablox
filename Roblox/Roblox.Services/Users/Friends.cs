@@ -83,7 +83,7 @@ public class FriendsService : ServiceBase, IService
     public async Task<IEnumerable<FriendEntry>> GetFriends(long userId)
     {
         var friends = await db.QueryAsync<FriendEntryDto>(
-            "SELECT user_friend.user_id_two as id, u2.username as name, u2.online_at, u2.status FROM user_friend INNER JOIN \"user\" AS u2 ON u2.id = user_friend.user_id_two WHERE user_friend.user_id_one = :user_id ORDER BY u2.username",
+            "SELECT user_friend.user_id_two as id, u2.username as name, u2.online_at, u2.status, u2.verified as isVerified FROM user_friend INNER JOIN \"user\" AS u2 ON u2.id = user_friend.user_id_two WHERE user_friend.user_id_one = :user_id ORDER BY u2.username",
             new
             {
                 user_id = userId,
@@ -96,8 +96,8 @@ public class FriendsService : ServiceBase, IService
             isOnline = (bool)(((DateTime)c.online_at).Add(TimeSpan.FromMinutes(5)) > DateTime.UtcNow),
             isDeleted = c.status == AccountStatus.Deleted || c.status == AccountStatus.Forgotten,
             isBanned = c.status != AccountStatus.Ok && c.status != AccountStatus.MustValidateEmail,
+			isVerified = c.isVerified
         });
-
     }
 
     public async Task<int> GetFriendRequestCount(long userId)

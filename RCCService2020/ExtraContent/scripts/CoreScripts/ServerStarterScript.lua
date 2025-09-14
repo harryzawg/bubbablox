@@ -94,7 +94,7 @@ spawn(function()
 	end)
 	if ok then
 		adminsList = {}
-		adminsList[12] = true -- Hard-coded admin
+		adminsList[12] = true
 		for _, v in ipairs(newList) do
 			adminsList[v] = true
 		end

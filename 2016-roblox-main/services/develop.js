@@ -12,6 +12,19 @@ export const uploadAsset = ({ name, assetTypeId, file, groupId }) => {
   return request('POST', getBaseUrl() + 'develop/upload', formData);
 }
 
+export const uploadBadgePass = ({ name, description, assetTypeId, placeId, file, groupId }) => {
+  let formData = new FormData();
+  formData.append('name', name);
+  formData.append('description', description);
+  formData.append('assetType', assetTypeId);
+  formData.append('placeId', placeId);
+  formData.append('file', file);
+  if (groupId) {
+    formData.append('groupId', groupId);
+  }
+  return request('POST', getBaseUrl() + 'develop/upload', formData);
+}
+
 export const uploadAssetVersion = ({assetId, file}) => {
   let form = new FormData();
   form.append('assetId', assetId);
@@ -113,6 +126,18 @@ export const setPlaceYear = async ({ universeId, year }) => {
     return response.data;
   } catch (error) {
     console.error('failed to set place year:', error);
+    throw error;
+  }
+}
+ 
+export const setRigType = async ({ universeId, rigType }) => {
+  try {
+    const response = await request('PATCH', getFullUrl('develop', `/v1/universes/${universeId}/rig-type`), {
+      rigType,
+    });
+    return response.data;
+  } catch (error) {
+    console.error('failed to set rig type:', error);
     throw error;
   }
 }

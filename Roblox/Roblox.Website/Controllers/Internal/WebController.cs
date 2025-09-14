@@ -4,6 +4,7 @@ using System.Text.Encodings.Web;
 using System.Web;
 using System.Diagnostics;
 using System.IO;
+using Newtonsoft.Json;
 using Microsoft.AspNetCore.Mvc;
 using Roblox.Dto.Assets;
 using Roblox.Exceptions;
@@ -36,7 +37,7 @@ public class WebController : ControllerBase
         // Init server close tasks
         Task.Run(async () =>
         {
-            while (true)
+/*             while (true)
             {
                 try
                 {
@@ -47,11 +48,82 @@ public class WebController : ControllerBase
                     Console.WriteLine("[info] KillOldservers task failed: {0}\n{1}",e.Message,e.StackTrace);
                 }
                 await Task.Delay(TimeSpan.FromSeconds(30));
-            }
+            } */
         });
     }
-    
-    [HttpGet("thumbs/avatar.ashx")]
+	
+	public class RobloxThumbnailBatchResponse
+	{
+		public RobloxThumbnailData[] data { get; set; }
+	}
+
+	public class RobloxThumbnailData
+	{
+		public long targetId { get; set; }
+		public string state { get; set; }
+		public string imageUrl { get; set; }
+		public string errorMessage { get; set; }
+	}
+	
+	private async Task<string?> GetRobloxAssetThumbnail(long robloxAssetId)
+	{
+		try
+		{
+			var ThumbReq = new[]
+			{
+				new
+				{
+					requestId = $"{robloxAssetId}::Asset:420x420:Png:regular:",
+					type = "Asset",
+					targetId = robloxAssetId,
+					token = "",
+					format = "Png",
+					size = "420x420",
+					version = ""
+				}
+			};
+
+			using var client = new HttpClient();
+			client.DefaultRequestHeaders.UserAgent.ParseAdd(
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+				"(KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
+			);
+			client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+			client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en-US,en;q=0.9");
+
+			var response = await client.PostAsync(
+				"https://thumbnails.roblox.com/v1/batch",
+				new StringContent(JsonConvert.SerializeObject(ThumbReq),
+					System.Text.Encoding.UTF8, "application/json")
+			);
+
+			if (!response.IsSuccessStatusCode)
+			{
+				var err = await response.Content.ReadAsStringAsync();
+				Console.WriteLine($"thumb API error for {robloxAssetId}: {response.StatusCode} {err}");
+				return null;
+			}
+
+			var content = await response.Content.ReadAsStringAsync();
+			var ThumbnailRes = JsonConvert.DeserializeObject<RobloxThumbnailBatchResponse>(content);
+
+			if (ThumbnailRes?.data == null || ThumbnailRes.data.Length == 0)
+				return null;
+
+			var ThumbData = ThumbnailRes.data[0];
+			if (ThumbData.state != "Completed" || string.IsNullOrEmpty(ThumbData.imageUrl))
+				return null;
+
+			return ThumbData.imageUrl;
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"Failed to get Roblox thumbnail for {robloxAssetId}: {ex.Message}");
+			return null;
+		}
+	}
+	
+	[HttpGet("thumbs/avatar.ashx")]
     public async Task<RedirectResult> GetAvatarThumbnail(long userId)
     {
         var authUser18Plus = userSession != null && await services.users.Is18Plus(userSession.userId);
@@ -71,6 +143,37 @@ public class WebController : ControllerBase
         return new RedirectResult(safeUrl, false);
     }
     
+	[HttpGet("thumbs/asset.ashx")]
+	public async Task<RedirectResult> GetAssetThumbnail([Required] long assetId)
+	{
+		var authUser18Plus = userSession != null && await services.users.Is18Plus(userSession.userId);
+
+		if (!authUser18Plus)
+		{
+			var exists = await services.assets.DoesAssetExist(assetId);
+
+			if (exists)
+			{
+				var asset18Plus = await services.assets.Is18Plus(assetId);
+				if (asset18Plus)
+					return new RedirectResult("/img/blocked.png", false);
+			}
+		}
+
+		var result = (await services.thumbnails.GetAssetThumbnails(new[] { assetId })).ToList();
+
+		if (result.Count == 0 || string.IsNullOrEmpty(result[0].imageUrl))
+		{
+			var roblox = await GetRobloxAssetThumbnail(assetId);
+			if (!string.IsNullOrEmpty(roblox))
+				return new RedirectResult(roblox, false);
+
+			return new RedirectResult("/img/placeholder.png", false);
+		}
+
+		return new RedirectResult(result[0].imageUrl, false);
+	}
+
     [HttpGet("thumbs/avatar-headshot.ashx")]
     public async Task<RedirectResult> GetAvatarHeadShot(long userId)
     {
@@ -84,24 +187,6 @@ public class WebController : ControllerBase
 
         var result = (await services.thumbnails.GetUserHeadshots(new[] {userId})).ToList();
         if (result.Count == 0)
-            return new RedirectResult("/img/placeholder.png", false);
-        return new RedirectResult(result[0].imageUrl ?? "/img/placeholder.png", false);
-    }
-
-        
-    [HttpGet("thumbs/asset.ashx")]
-    public async Task<RedirectResult> GetAssetThumbnail([Required] long assetId)
-    {
-        var authUser18Plus = userSession != null && await services.users.Is18Plus(userSession.userId);
-        if (!authUser18Plus)
-        {
-            var asset18Plus = await services.assets.Is18Plus(assetId);
-            if (asset18Plus)
-                return new RedirectResult("/img/blocked.png", false);
-        }
-        
-        var result = (await services.thumbnails.GetAssetThumbnails(new[] {assetId})).ToList();
-        if (result.Count == 0 || result[0].imageUrl == null)
             return new RedirectResult("/img/placeholder.png", false);
         return new RedirectResult(result[0].imageUrl ?? "/img/placeholder.png", false);
     }
@@ -470,11 +555,6 @@ public class WebController : ControllerBase
 		if (modInfo.moderationStatus != ModerationStatus.ReviewApproved)
 			throw new BadRequestException();
 
-		var rbxl = Path.Combine(Configuration.RccServicePath, "content", $"{placeId}.rbxl");
-
-		if (!System.IO.File.Exists(rbxl))
-			throw new BadRequestException(400, "There is no place uploaded to this game.");
-
 		string baselink = Roblox.Configuration.BaseUrl;
 		string auth = $"{baselink}/Login/Negotiate.ashx";
 		string ticket = Request.Cookies[".ROBLOSECURITY"];
@@ -596,7 +676,9 @@ public class WebController : ControllerBase
         Models.Assets.Type.Shirt,
         Models.Assets.Type.Pants,
         Models.Assets.Type.Image,
-		Models.Assets.Type.Mesh
+		Models.Assets.Type.Mesh,
+		Models.Assets.Type.Badge,
+		Models.Assets.Type.GamePass,
     };
 
     private static int pendingAssetUploads { get; set; } = 0;
@@ -631,12 +713,13 @@ public class WebController : ControllerBase
 				throw new RobloxException(400, 0, "The asset file doesn't look correct. Please try again.");
 			fs.Position = 0;
 			
-			var rbxlpath = Path.Combine(Configuration.RccServicePath, "content", $"{request.assetId}.rbxl");
+			// This was for 2016 but the api key is a lot more reliable
+/* 			var rbxlpath = Path.Combine(Configuration.RccServicePath, "content", $"{request.assetId}.rbxl");
 			await using (var fileStream = new FileStream(rbxlpath, FileMode.Create, FileAccess.Write))
 			{
 				await fs.CopyToAsync(fileStream);
 			}
-			fs.Position = 0;
+			fs.Position = 0; */
 
 			await services.assets.CreateAssetVersion(request.assetId, safeUserSession.userId, fs);
 			// wait before re-rendering just in case it hasn't updated the RBXL yet
@@ -679,7 +762,7 @@ public class WebController : ControllerBase
 	}
     
     [HttpPost("develop/upload")]
-    public async Task<CreateResponse> UploadItem([Required, FromForm] UploadAssetRequest request)
+    public async Task<CreateResponse> UploadItem([Required, FromForm] UploadAssetRequestBadges request)
     {
         FeatureFlags.FeatureCheck(FeatureFlag.UploadContentEnabled);
         if (!AllowedAssetTypes.Contains(request.assetType) || userSession == null) throw new BadRequestException();
@@ -691,12 +774,14 @@ public class WebController : ControllerBase
         
         var isClothing =
             request.assetType is Models.Assets.Type.Shirt or Models.Assets.Type.Pants or Models.Assets.Type.TeeShirt;
-        var isAudio = request.assetType is Models.Assets.Type.Audio;
-        var isImage = request.assetType is Models.Assets.Type.Image;
+		var isAudio = request.assetType is Models.Assets.Type.Audio;
+		var isImage = request.assetType is Models.Assets.Type.Image;
 		var isMesh = request.assetType is Models.Assets.Type.Mesh;
+		var isBadge = request.assetType is Models.Assets.Type.Badge;
+		var isGamePass = request.assetType is Models.Assets.Type.GamePass;
 
-        if (!isClothing && !isAudio && !isImage && !isMesh)
-            throw new RobloxException(400, 0, "Endpoint does not support this assetType: " + request.assetType);
+		if (!isClothing && !isAudio && !isImage && !isMesh && !isBadge && !isGamePass)
+			throw new RobloxException(400, 0, "Endpoint does not support this assetType: " + request.assetType);
         
         // Limit of 50 assets globally pending approval before failure
         var pendingAssets = await services.assets.CountAssetsPendingApproval();
@@ -923,6 +1008,70 @@ public class WebController : ControllerBase
 					Console.WriteLine($"error generating OBJ for mesh {asset.assetId}: {e}");
 				}
 
+				return asset;
+			}
+			else if (isBadge || isGamePass)
+			{
+				var stream = request.file.OpenReadStream();
+				var pictureData = await services.assets.ValidateImage(stream);
+				if (pictureData == null)
+					throw new BadRequestException(0, "Invalid image file");
+				stream.Position = 0;
+
+				var Image = await services.assets.CreateAsset(
+					request.name + " Image", 
+					"Thumbnail",
+					userSession.userId, 
+					creatorType, 
+					creatorId, 
+					stream, 
+					Models.Assets.Type.Image,
+					Genre.All,
+					ModerationStatus.AwaitingApproval,
+					skipHashCheck: true);
+				
+				stream.Position = 0;
+				await services.assets.InsertOrUpdateAssetVersionMetadataImage(
+					Image.assetVersionId, 
+					(int)stream.Length,
+					pictureData.width, 
+					pictureData.height, 
+					pictureData.imageFormat,
+					await services.assets.GenerateImageHash(stream));
+				
+				var asset = await services.assets.CreateAsset(
+					request.name, 
+					request.description,
+					userSession.userId, 
+					creatorType, 
+					creatorId, 
+					null, 
+					request.assetType, 
+					Genre.All, 
+					ModerationStatus.AwaitingApproval,
+					default,
+					default,
+					default,
+					default,
+					Image.assetId);
+
+				await services.users.CreateUserAsset(userSession.userId, asset.assetId);
+				
+				if (isBadge)
+				{
+					if (request.placeId == null)
+						throw new BadRequestException(0, "Badges must have a placeId");
+					
+					await services.assets.InsertBadge(asset.assetId, request.placeId.Value, userSession.userId);
+				}
+				else if (isGamePass)
+				{
+					if (request.placeId == null)
+						throw new BadRequestException(0, "Passes must have a placeId");
+					
+					await services.assets.InsertPass(asset.assetId, request.placeId.Value, userSession.userId);
+				}
+				
 				return asset;
 			}
 

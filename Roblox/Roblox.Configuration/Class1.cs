@@ -42,6 +42,7 @@ public static class Configuration
     public static string AssetValidationServiceUrl { get; set; }
     public static string AssetValidationServiceAuthorization { get; set; }
     public static string BotAuthorization { get; set; }
+	public static string RenderAuthorization { get; set; }
     public static string RccAuthorization { get; set; }
 	public static string RccServicePath { get; set; }
 	public static string RccService2015Path { get; set; }

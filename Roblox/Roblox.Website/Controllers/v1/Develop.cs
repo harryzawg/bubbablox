@@ -117,4 +117,12 @@ public class DevelopControllerV1 : ControllerBase
 		await services.assets.ValidatePermissions(place, safeUserSession.userId);
 		await services.games.SetPlaceYear(place, request.year);
     }
+	
+	[HttpPatch("universes/{universeId:long}/rig-type")]
+	public async Task SetRigType(long universeId, [Required, FromBody] SetRigTypeReq request)
+	{
+		var place = await services.games.GetRootPlaceId(universeId);
+		await services.assets.ValidatePermissions(place, safeUserSession.userId);
+		await services.games.SetRigType(place, request.rigType);
+    }
 }

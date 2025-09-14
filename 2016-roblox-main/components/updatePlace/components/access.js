@@ -2,18 +2,20 @@ import updatePlaceStore from "../stores/updatePlaceStore";
 import {useEffect, useState} from "react";
 import ActionButton from "../../actionButton";
 import useButtonStyles from "../../../styles/buttonStyles";
-import {setUniverseMaxPlayers, setPlaceYear} from "../../../services/develop";
+import {setUniverseMaxPlayers, setPlaceYear, setRigType} from "../../../services/develop";
 
 const Access = props => {
   const s = useButtonStyles();
   const store = updatePlaceStore.useContainer();
   const [maxPlayers, setMaxPlayers] = useState(10);
+  const [rigTypeValue, setRigTypeValue] = useState("playerChoice");
   const [year, setYear] = useState(2016);
   const [feedback, setFeedback] = useState(null);
 
   const resetForm = () => {
     setFeedback(null);
     setMaxPlayers(store.details.maxPlayerCount);
+	setRigTypeValue(store.details.rigType || "playerChoice");
     setYear(store.details.year || 2016);
   }
 
@@ -25,6 +27,10 @@ const Access = props => {
         universeId: store.details.universeId,
         maxPlayers: maxPlayers,
       }),
+	  setRigType({
+		  universeId: store.details.universeId,
+		  rigType: rigTypeValue,
+	  }),
       setPlaceYear({
         universeId: store.details.universeId,
         year: year,
@@ -52,8 +58,8 @@ const Access = props => {
         <select value={maxPlayers} className='br-none border-1 border-secondary pe-2' onChange={v => {
           setMaxPlayers(parseInt(v.currentTarget.value, 10));
         }}>
-          {[... new Array(11)].map((_, i) => {
-            return <option value={i+10} key={i}>{i+10}</option>
+          {[... new Array(30)].map((_, i) => {
+            return <option value={i+1} key={i}>{i+1}</option>
           })}
         </select>
       </div>
@@ -66,6 +72,17 @@ const Access = props => {
           <option value={2016}>2016</option>
 		  <option value={2018}>2018</option>
 		  <option value={2020}>2020</option>
+        </select>
+      </div>
+	  
+	  <div className='mt-3'>
+        <p className='fw-bold'>Rig Type:</p>
+        <select value={rigTypeValue} className='br-none border-1 border-secondary pe-2' onChange={v => {
+          setRigTypeValue(v.currentTarget.value);
+        }}>
+          <option value="playerChoice">Player Choice</option>
+		  <option value="MorphToR6">R6</option>
+		  <option value="MorphToR15">R15</option>
         </select>
       </div>
 

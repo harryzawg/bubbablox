@@ -14,6 +14,7 @@ import PlayerImage from "../playerImage";
 import dayjs from "../../lib/dayjs";
 import ForumContainer from "../forumContainer";
 import BcOverlay from "../bcOverlay";
+import {getUserInfo} from "../../services/users";
 
 const useStyles = createUseStyles({
   forumHeader: {
@@ -70,6 +71,28 @@ const ForumThread = props => {
   if (!threadInfo || !cat || !sub)
     return null;
 
+  // for tick
+  const Username = ({ userId, username }) => {
+	const [isVerified, setIsVerified] = useState(false);
+
+	useEffect(() => {
+	  getUserInfo({ userId })
+		.then(userInfo => {
+		  setIsVerified(userInfo.isVerified || false);
+		})
+		.catch(error => {
+		  console.error('failed to get user info:', error);
+		});
+	}, [userId]);
+
+	return (
+	  <>
+		{username}
+		{isVerified && <img src="/verified.svg" alt="Verified" style={{width: '16px', height: '16px', marginLeft: '3px'}} />}
+	  </>
+	);
+  };
+
   const PreviousAndNextThread = () => {
     return  <div className={s.forumHeader}>
       <h4 className='text-end pe-2 pt-1 pb-1 text-white mb-0'>
@@ -111,7 +134,7 @@ const ForumThread = props => {
                 <td className='align-top'>
                   <Link href={`/users/${post.userId}/profile`}>
                     <a>
-                      {post.username}
+						<Username userId={post.userId} username={post.username} />
                     </a>
                   </Link>
                   <PlayerImage id={post.userId} />

@@ -224,8 +224,8 @@ public class SessionMiddleware
 				
 				try
 				{
-					var decodedResult = DecodeJwt<JwtEntry>(cookie);
-					if (!string.IsNullOrEmpty(decodedResult.sessionId))
+					var DecodedRes = DecodeJwt<JwtEntry>(cookie);
+					if (!string.IsNullOrEmpty(DecodedRes.sessionId))
 					{
 						using var users = ServiceProvider.GetOrCreate<UsersService>();
 						using var accountInformation = ServiceProvider.GetOrCreate<AccountInformationService>();
@@ -233,7 +233,7 @@ public class SessionMiddleware
 						UserInfo userInfo;
                         try
                         {
-                            var sessResult = await users.GetSessionById(decodedResult.sessionId);
+                            var sessResult = await users.GetSessionById(DecodedRes.sessionId);
                             userInfo = await users.GetUserById(sessResult.userId);
                                                     
 							var IP = ControllerBase.GetRequesterIpRaw(ctx);
@@ -272,7 +272,7 @@ public class SessionMiddleware
 							return;
 						}
 
-						ctx.Items[CookieName] = new UserSession(userInfo.userId, userInfo.username, userInfo.created, userInfo.accountStatus, 0, false, decodedResult.sessionId);
+						ctx.Items[CookieName] = new UserSession(userInfo.userId, userInfo.username, userInfo.created, userInfo.accountStatus, 0, false, DecodedRes.sessionId);
 
 						if (userInfo.accountStatus is AccountStatus.Suppressed or AccountStatus.Poisoned or AccountStatus.Deleted)
 						{

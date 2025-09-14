@@ -76,6 +76,7 @@ public class UsersControllerV1 : ControllerBase
             info.description,
             info.created,
             isBanned,
+			isVerified = info.isVerified
         };
     }
 
@@ -150,7 +151,7 @@ public class UsersControllerV1 : ControllerBase
             data = entries,
         };
     }
-	
+	// wtf was i doing
 	[HttpGet("user/get-2020-menu")]
 	public async Task<dynamic> Get2020MenuPreference()
 	{

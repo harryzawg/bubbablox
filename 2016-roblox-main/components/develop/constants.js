@@ -2,6 +2,8 @@ import React from "react";
 import Ads from "./components/subPages/ads";
 import Clothing from "./components/subPages/clothing";
 import GamesSubPage from "./components/subPages/games";
+import Badges from "./components/subPages/badges";
+import Passess from "./components/subPages/passess";
 
 const developerPages = [
   {
@@ -32,13 +34,13 @@ const developerPages = [
     id: 21,
     name: 'Badges',
     url: '/develop?View=21',
-    disabled: true,
+	element: props => <Badges {...props}/>,
   },
   {
-    id: 100,
+    id: 34,
     name: 'Passes',
-    url: '/develop?View=100',
-    disabled: true,
+    url: '/develop?View=34',
+    element: props => <Passess {...props}/>,
   },
   {
     id: 3,

@@ -12,7 +12,7 @@ const useStyles = createUseStyles({
         justifyContent: "center",
         alignItems: "center",
     },
-    modalBtn: {
+    selectBtn: {
         padding: 9,
         margin: "0 5px",
         width: 90,
@@ -35,6 +35,13 @@ const useStyles = createUseStyles({
             fontWeight: 400,
             lineHeight: "1em",
         }
+    },
+	redrawBtn: {
+		color: '#fff',
+        backgroundColor: '#6c6c6c',
+        padding: 4,
+        fontSize: 14,
+        lineHeight: "100%",
     },
     inputStyle: {},
 });
@@ -88,14 +95,14 @@ const CreateOutfitModal = ({openModal}) => {
 					console.log("Created outfit")
                     setName(null);
                 }}
-                className={s.modalBtn}
+                className={s.selectBtn}
                 disabled={nameHasError}
             />
             <ActionButton
                 label="Cancel"
                 buttonStyle={btnStyles.newCancelButton}
                 onClick={() => openModal(false)}
-                className={s.modalBtn}
+                className={s.selectBtn}
             />
         </>}
         footerClass={s.footerClass}

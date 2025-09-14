@@ -6,6 +6,7 @@ import dayjs from "dayjs";
 const DashboardStore = createContainer(() => {
   const [friends, setFriends] = useState(null);
   const [friendStatus, setFriendStatus] = useState(null);
+  const [friendsVerified, setFriendsVerified] = useState({});
 
   useEffect(() => {
     if (!friends || friendStatus) {

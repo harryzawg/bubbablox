@@ -19,6 +19,7 @@ public class PlaceEntry
     public int maxPlayerCount { get; set; }
     public bool gearPermissions { get; set; }
     public int year { get; set; } = 2016;
+	public string rigType { get; set; } = "playerChoice";
     public Genre genre { get; set; }
     public ModerationStatus moderationStatus { get; set; }
     public DateTime created { get; set; }

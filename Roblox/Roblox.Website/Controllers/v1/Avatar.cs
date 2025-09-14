@@ -54,7 +54,7 @@ public class AvatarControllerV1 : ControllerBase
         });
     }
     
-	private void AttemptScheduleRenderR15(IEnumerable<long>? assetIds = null, bool forceRedraw = false)
+	private void AttemptScheduleRenderR15(IEnumerable<long>? assetIds = null, string? currentThumbnail = null, string? currentHeadshot = null, bool forceRedraw = false)
 	{
 		var userId = safeUserSession.userId;
 
@@ -76,7 +76,7 @@ public class AvatarControllerV1 : ControllerBase
 				var assetsToUse = assetIds ?? await cache.GetPendingAssets(userId);
 				var colors = await cache.GetColors(userId);
 				// Idk why it breaks when i don't pass assets but i'm too lazy to fix it
-				await services.avatar.RedrawAvatarR15(userId, assetsToUse, colors, forceRedraw);
+				await services.avatar.RedrawAvatarR15(userId, assetsToUse, colors, currentThumbnail, currentHeadshot, forceRedraw);
 				Console.WriteLine($"R15 render completed for {userId}");
 			}
 			catch (Exception e)
@@ -108,7 +108,7 @@ public class AvatarControllerV1 : ControllerBase
 		catch (Exception ex)
 		{
 			Console.WriteLine($"[ERROR] r15 render sucks: {ex.Message}\n{ex.StackTrace}");
-			return new { success = false, error = ex.Message };
+			return new { error = ex.Message };
 		}
 	} */
     
@@ -119,13 +119,14 @@ public class AvatarControllerV1 : ControllerBase
 		var userId = userSession.userId;
 
 		var avatarTypeEntry = await services.avatar.GetAvatarType(safeUserSession.userId);
+		var avatarImages = await services.avatar.GetAvatarImages(userId);
 		// My/Avatar instantly tries to load the avatar, so set it to pending then when it's done it properly loads
 		await services.avatar.UpdateUserAvatarImages(safeUserSession.userId, null, null);
 		var wearingAssets = (await services.avatar.GetWornAssets(safeUserSession.userId)).ToList();
 
 		if (avatarTypeEntry.isR15)
 		{
-			AttemptScheduleRenderR15(wearingAssets, true);
+			AttemptScheduleRenderR15(wearingAssets, avatarImages.thumbnailUrl, avatarImages.headshotUrl, true);
 		}
 		else
 		{
@@ -140,6 +141,7 @@ public class AvatarControllerV1 : ControllerBase
 		var userId = userSession.userId;
 
 		var wornAssets = (await services.avatar.GetWornAssets(userId)).ToList();
+		var avatarImages = await services.avatar.GetAvatarImages(userId);
 
 		using var cache = ServiceProvider.GetOrCreate<AvatarCache>();
 		await cache.SetPendingAssets(userId, request.assetIds);
@@ -186,7 +188,7 @@ public class AvatarControllerV1 : ControllerBase
 
 		if (avatarTypeEntry.isR15)
 		{
-			AttemptScheduleRenderR15(request.assetIds);
+			AttemptScheduleRenderR15(request.assetIds, avatarImages.thumbnailUrl, avatarImages.headshotUrl);
 		}
 		else
 		{
@@ -241,8 +243,8 @@ public class AvatarControllerV1 : ControllerBase
 		var recent = await services.avatar.GetRecentItems(safeUserSession.userId);
 		var multiGet = await services.assets.MultiGetInfoById(recent);
 
-		// Filter out animations because it doesn't have a limit in recent and it breaks
-		var Animations = new[]
+		// Filter out animations/other items because it doesn't have a limit in recent and it breaks or just shows it for some reason
+		var Filter = new[]
 		{
 			Models.Assets.Type.ClimbAnimation,
 			Models.Assets.Type.FallAnimation,
@@ -253,10 +255,16 @@ public class AvatarControllerV1 : ControllerBase
 			Models.Assets.Type.WalkAnimation,
 			Models.Assets.Type.EmoteAnimation,
 			Models.Assets.Type.Package,
+			Models.Assets.Type.Place,
+			Models.Assets.Type.Audio,
+			Models.Assets.Type.Badge,
+			Models.Assets.Type.GamePass,
+			Models.Assets.Type.Mesh,
+			Models.Assets.Type.Image,
 		};
 
 		var filtered = multiGet
-			.Where(c => !Animations.Contains(c.assetType))
+			.Where(c => !Filter.Contains(c.assetType))
 			.Select(c => new
 			{
 				id = c.id,

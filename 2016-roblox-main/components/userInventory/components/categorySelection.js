@@ -146,6 +146,14 @@ const CategorySelection = props => {
       name: 'Packages',
       value: 32,
     },
+	{
+      name: 'Badges',
+      value: 21,
+    },
+    {
+      name: 'Game Passes',
+      value: 34,
+    },
   ].filter(v => !!v);
   const [selected ,setSelected] = useState(() => {
     // On first load, hide menu if user is on desktop.

@@ -45,9 +45,9 @@ public class AuthenticationControllerV2 : ControllerBase
             throw new BadRequestException(0, "Invalid password");
         }
         // Pass cooldown check
-        if (!await services.cooldown.TryCooldownCheck("change password " + safeUserSession.userId,
+/*         if (!await services.cooldown.TryCooldownCheck("change password " + safeUserSession.userId,
                 TimeSpan.FromMinutes(1)))
-            throw new RobloxException(429, 0, "TooManyRequests");
+            throw new RobloxException(429, 0, "TooManyRequests"); */
         // Verify password
         var correctPass = await services.users.VerifyPassword(safeUserSession.userId, request.currentPassword);
         if (!correctPass)

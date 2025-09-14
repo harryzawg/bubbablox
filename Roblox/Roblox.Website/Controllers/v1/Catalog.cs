@@ -709,6 +709,139 @@ public class CatalogControllerV1 : ControllerBase
 			data = visibleItems
 		};
 	}
+	
+	// recycled recommendations
+	[HttpGet("badges/asset/{placeId:long}")]
+	public async Task<dynamic> GetBadgesForPlace(long placeId, int limit = 10, int offset = 0)
+	{
+		var badges = await services.assets.GetBadgesForPlace(placeId);
+		
+		var visibleItems = new List<dynamic>();
+		var processedAssetIds = new HashSet<long>();
+		
+		foreach (var c in badges)
+		{
+			if (processedAssetIds.Contains(c.id)) continue;
+			if (visibleItems.Count >= limit + offset && offset > 0) continue;
+			if (visibleItems.Count >= limit) break;
+			
+			// check visibility
+			var isVisible = await services.assets.GetAssetVisibility(c.id);
+			if (!isVisible) continue;
+			
+			processedAssetIds.Add(c.id);
+			
+			visibleItems.Add(new
+			{
+				item = new
+				{
+					assetId = c.id,
+					name = c.name,
+					price = c.price,
+					premiumPrice = (int?) null,
+					absoluteUrl = $"/catalog/{c.id}/--",
+				},
+				creator = new
+				{
+					creatorId = c.creatorTargetId,
+					creatorType = c.creatorType,
+					name = c.creatorName,
+					creatorProfileLink = c.creatorType == CreatorType.User
+						? $"/users/{c.creatorTargetId}/profile"
+						: $"/groups/{c.creatorTargetId}/--",
+				},
+				product = new
+				{
+					id = c.id,
+					price = c.price,
+					isForsale = c.isForSale,
+					isPublicDomain = false,
+					isRental = false,
+					bcRequirement = 0,
+					totalPrivateSales = 0,
+					offsaleDeadline = c.offsaleDeadline,
+					sellerId = 0,
+					sellerName = (string?)null,
+					lowestPrivateSaleUserAssetId = (int?)null,
+					isXboxExclusiveItem = false,
+				},
+			});
+		}
+		
+		var paginatedItems = visibleItems.Skip(offset).Take(limit).ToList();
+		
+		return new
+		{
+			data = paginatedItems,
+			total = visibleItems.Count
+		};
+	}
+
+	[HttpGet("passes/asset/{placeId:long}")]
+	public async Task<dynamic> GetPassesForPlace(long placeId, int limit = 10, int offset = 0)
+	{
+		var passes = await services.assets.GetPassesForPlace(placeId);
+		
+		var visibleItems = new List<dynamic>();
+		var processedAssetIds = new HashSet<long>();
+		
+		foreach (var c in passes)
+		{
+			if (processedAssetIds.Contains(c.id)) continue;
+			if (visibleItems.Count >= limit + offset && offset > 0) continue;
+			if (visibleItems.Count >= limit) break;
+			
+			// check visibility
+			var isVisible = await services.assets.GetAssetVisibility(c.id);
+			if (!isVisible) continue;
+			
+			processedAssetIds.Add(c.id);
+			
+			visibleItems.Add(new
+			{
+				item = new
+				{
+					assetId = c.id,
+					name = c.name,
+					price = c.price,
+					premiumPrice = (int?) null,
+					absoluteUrl = $"/catalog/{c.id}/--",
+				},
+				creator = new
+				{
+					creatorId = c.creatorTargetId,
+					creatorType = c.creatorType,
+					name = c.creatorName,
+					creatorProfileLink = c.creatorType == CreatorType.User
+						? $"/users/{c.creatorTargetId}/profile"
+						: $"/groups/{c.creatorTargetId}/--",
+				},
+				product = new
+				{
+					id = c.id,
+					price = c.price,
+					isForsale = c.isForSale,
+					isPublicDomain = false,
+					isRental = false,
+					bcRequirement = 0,
+					totalPrivateSales = 0,
+					offsaleDeadline = c.offsaleDeadline,
+					sellerId = 0,
+					sellerName = (string?)null,
+					lowestPrivateSaleUserAssetId = (int?)null,
+					isXboxExclusiveItem = false,
+				},
+			});
+		}
+		
+		var paginatedItems = visibleItems.Skip(offset).Take(limit).ToList();
+		
+		return new
+		{
+			data = paginatedItems,
+			total = visibleItems.Count
+		};
+	}
 
     [HttpGet("search/items")]
     public async Task<SearchResponse> SearchItems(string? category, string? subcategory, string? sortType, string? keyword, string? cursor, int limit = 10, CreatorType? creatorType = null, long? creatorTargetId = null, bool includeNotForSale = false, string? _genreFilterCsv = null)

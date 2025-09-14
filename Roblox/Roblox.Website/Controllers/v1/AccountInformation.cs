@@ -15,6 +15,12 @@ public class AccountInformationControllerV1 : ControllerBase
     {
         return await services.accountInformation.GetUserBadges(userId);
     }
+	
+	[HttpGet("users/{userId:long}/badges")]
+    public async Task<dynamic> GetPlayerBadges(long userId)
+    {
+        return await services.users.GetUserBadges(userId);
+    }
 
     [HttpGet("metadata")]
     public dynamic GetMetadata()

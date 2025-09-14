@@ -127,7 +127,7 @@ const MyDashboard = props => {
               <div className={'row ' + s.friendRow}>
                 {
                   friends.map(v => {
-                    return <FriendEntry key={v.id} {...v} />
+                    return <FriendEntry key={v.id} {...v} isVerified={v.isVerified || false} />
                   })
                 }
               </div>

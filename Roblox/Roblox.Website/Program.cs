@@ -71,6 +71,7 @@ Roblox.Configuration.HCaptchaPublicKey = configuration.GetSection("HCaptcha:Publ
 Roblox.Configuration.HCaptchaPrivateKey = configuration.GetSection("HCaptcha:Private").Value;
 Roblox.Configuration.AllowedNetworkPorts = configuration.GetSection("GameServer:AllowedNetworkPorts").GetChildren().Select(c => int.Parse(c.Value));
 Roblox.Configuration.GameServerAuthorization = configuration.GetSection("GameServerAuthorization").Value;
+Roblox.Configuration.RenderAuthorization = configuration.GetSection("Render:Authorization").Value;
 Roblox.Configuration.BotAuthorization = configuration.GetSection("BotAuthorization").Value;
 // game-server config stuff
 IConfiguration gameServerConfig = new ConfigurationBuilder().AddJsonFile("game-servers.json").Build();
@@ -154,8 +155,8 @@ app.Use(async (context, next) =>
 
     if (string.IsNullOrEmpty(path) || path == "/")
     {
-        if (context.Request.Cookies.TryGetValue(".ROBLOSECURITY", out var cookieValue) && 
-            !string.IsNullOrEmpty(cookieValue))
+        if (context.Request.Cookies.TryGetValue(".ROBLOSECURITY", out var Cookie) && 
+            !string.IsNullOrEmpty(Cookie))
         {
             context.Response.Redirect("/home", permanent: false);
             return;
@@ -178,6 +179,8 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = "",
     OnPrepareResponse = prepareResponseForCache
 });
+
+System.Net.ServicePointManager.DefaultConnectionLimit = 100;
 
 // CdnBaseUrl is empty on dev servers
 if (string.IsNullOrWhiteSpace(Roblox.Configuration.CdnBaseUrl))
@@ -315,6 +318,8 @@ Task.Run(async () =>
     await db.OpenAsync();
     await using var cmd = new NpgsqlCommand("DELETE FROM asset_server_player;", db);
     await cmd.ExecuteNonQueryAsync();
+	await using var cmd2 = new NpgsqlCommand("DELETE FROM asset_server;", db);
+    await cmd2.ExecuteNonQueryAsync();
     
     await Task.Delay(TimeSpan.FromSeconds(5));
     using var assets = Roblox.Services.ServiceProvider.GetOrCreate<AssetsService>();

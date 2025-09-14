@@ -572,7 +572,7 @@ public class UsersService : ServiceBase, IService
         if (exists && cached != null)
             return cached;
         
-        var res = await db.QuerySingleOrDefaultAsync<UserInfo>("SELECT id as userId, username, status as accountStatus, created_at as created, description FROM \"user\" WHERE id = :id", new { id = userId });
+        var res = await db.QuerySingleOrDefaultAsync<UserInfo>("SELECT id as userId, username, status as accountStatus, created_at as created, description, verified as isVerified FROM \"user\" WHERE id = :id", new { id = userId });
         if (res == null) throw new RecordNotFoundException();
         if (userId == 1)
         {
@@ -1983,7 +1983,8 @@ public class UsersService : ServiceBase, IService
         if (membershipType == null)
             return;
         var metadata = MembershipMetadata.GetMetadata(membershipType.membershipType);
-        var dailyRobux = isStaff ? 250 : metadata.dailyRobux;
+        //var dailyRobux = isStaff ? 250 : metadata.dailyRobux;
+		var dailyRobux = metadata.dailyRobux;
         if (dailyRobux == 0)
             return;
 
@@ -2486,6 +2487,73 @@ public class UsersService : ServiceBase, IService
         
         await ChangePassword(ticket.userId, newPW);
     }
+	
+	public async Task GiveUserBadge(long userId, long badgeId)
+	{
+		// check if the user already has the badge
+		var HasBadge = await db.QueryFirstOrDefaultAsync<bool>(
+			"SELECT COUNT(*) > 0 FROM user_badge WHERE user_id = :user_id AND badge_id = :badge_id",
+			new
+			{
+				user_id = userId,
+				badge_id = badgeId,
+			});
+		
+		if (!HasBadge)
+		{
+			await db.ExecuteAsync("INSERT INTO user_badge (user_id, badge_id) VALUES (:user_id, :badge_id)", new
+			{
+				user_id = userId,
+				badge_id = badgeId,
+			});
+		}
+	}
+	
+	public async Task<IEnumerable<GamePassEntry>> GetUserGamePassess(long userId)
+	{
+		var result = await db.QueryAsync<GamePassEntry>(
+			@"SELECT ua.asset_id as id, a.name
+			  FROM public.user_asset ua
+			  JOIN public.asset a ON a.id = ua.asset_id
+			  WHERE ua.user_id = :user_id AND a.asset_type = 34",
+			new
+			{
+				user_id = userId
+			});
+
+		return result.Select(c =>
+		{
+			c.name = c.name ?? "Game Pass";
+			return c;
+		});
+	}
+	public async Task<IEnumerable<GameBadgeEntry>> GetUserBadges(long userId)
+	{
+		var result = await db.QueryAsync<GameBadgeEntry>(
+			@"SELECT ua.asset_id as id, a.name
+			  FROM public.user_asset ua
+			  JOIN public.asset a ON a.id = ua.asset_id
+			  WHERE ua.user_id = :user_id AND a.asset_type = 21",
+			new
+			{
+				user_id = userId
+			});
+
+		return result.Select(c =>
+		{
+			c.name = c.name ?? "Badge";
+			return c;
+		});
+	}
+
+	public async Task GiveUserGameBadge(long userId, long badgeId)
+	{
+		await db.ExecuteAsync(
+			@"INSERT INTO public.user_asset (user_id, asset_id, price)
+			  VALUES (:user_id, :asset_id, 0)",
+			new { user_id = userId, asset_id = badgeId }
+		);
+	}
 
     public bool IsThreadSafe()
     {

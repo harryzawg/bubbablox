@@ -88,6 +88,12 @@ public class FriendsControllerV1 : ControllerBase
             throw new BadRequestException(7, "The user cannot be friends with itself");
 
         await services.friends.AcceptFriendRequest(safeUserSession.userId, userIdToAccept);
+		var friends = await services.friends.GetFriends(safeUserSession.userId);
+		if (friends.Count() >= 20)
+		{
+			//Console.WriteLine("Giving friend badge");
+			await services.users.GiveUserBadge(safeUserSession.userId, 2);
+		}
     }
 
     [HttpPost("users/{userIdToDecline:long}/decline-friend-request")]

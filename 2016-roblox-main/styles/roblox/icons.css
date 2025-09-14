@@ -394,8 +394,6 @@ a.btn-generic-edit-xs:hover .icon-edit {
 .icon-combat-initiation,
 .icon-warrior,
 .icon-bloxxer,
-.icon-homestead,
-.icon-bricksmith,
 .icon-official-model-maker,
 .icon-builders-club,
 .icon-turbo-builders-club,
@@ -410,6 +408,24 @@ a.btn-generic-edit-xs:hover .icon-edit {
 	height: 140px;
 	display: inline-block;
 	vertical-align: middle;
+}
+
+.icon-homestead,
+.icon-bricksmith {
+  background-image: url(/img/roblox_badges.svg);
+  background-repeat: no-repeat;
+  background-size: 280px;
+  width: 140px;
+  height: 140px;
+  display: inline-block;
+}
+
+.icon-homestead {
+  background-position: -149px -428px;
+}
+
+.icon-bricksmith {
+  background-position: -10px -568px;
 }
 
 .icon-default-friendstatus,

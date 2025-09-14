@@ -88,6 +88,22 @@ public class AvatarService : ServiceBase, IService
             leftLegColorId = existingAvatar.left_leg_color_id,
         };
     }
+	
+	// Get previous avatar images in case render fails
+	public async Task<AvatarImages> GetAvatarImages(long userId)
+	{
+		var result = await db.QuerySingleOrDefaultAsync<AvatarImages>(
+			"SELECT thumbnail_url as thumbnailUrl, headshot_thumbnail_url as headshotUrl FROM user_avatar WHERE user_id = :user_id",
+			new { user_id = userId });
+		
+		return result ?? new AvatarImages();
+	}
+
+	public class AvatarImages
+	{
+		public string? thumbnailUrl { get; set; }
+		public string? headshotUrl { get; set; }
+	}
 
 	private readonly Models.Assets.Type[] _wearableAssetTypes = new[]
 	{
@@ -792,7 +808,8 @@ public class AvatarService : ServiceBase, IService
 		await UpdateUserAvatarImages(userId, headshotUrl, thumbnailUrl);
 	}
 	
-    public async Task RedrawAvatarR15(long userId, IEnumerable<long>? newAssetIds = null, ColorEntry? colors = null, bool forceRedraw = false, bool ignoreLock = true)
+	public async Task RedrawAvatarR15(long userId, IEnumerable<long>? newAssetIds = null, ColorEntry? colors = null, 
+		string? currentThumbnail = null, string? currentHeadshot = null, bool forceRedraw = false, bool ignoreLock = true)
     {
         // required services
         using var assets = ServiceProvider.GetOrCreate<AssetsService>();
@@ -816,9 +833,13 @@ public class AvatarService : ServiceBase, IService
             assetIds = (await FilterAssetsForRender(userId, assetIds)).ToList();
         }
 
-        var assetsOk = await ConfirmAssetSelectionIsOkForRender(userId, assetIds);
-        if (!assetsOk)
-            throw new RobloxException(400, 0, "One or more assets are invalid");
+		var assetsOk = await ConfirmAssetSelectionIsOkForRender(userId, assetIds);
+		if (!assetsOk)
+		{
+			// if fails, set to the old avatar thumbnail
+			await UpdateUserAvatarImages(userId, currentHeadshot, currentThumbnail);
+			throw new RobloxException(400, 0, "One or more assets are invalid");
+		}
         // Now, update the avatar. This returns a hash
         var avatarHash = await UpdateUserAvatar(userId, colors, assetIds);
         // Get our image urls

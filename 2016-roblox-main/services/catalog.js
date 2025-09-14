@@ -79,6 +79,16 @@ export const getRecommendations = ({ assetId, assetTypeId, limit }) => {
   return request('GET', getFullUrl('catalog', '/v1/recommendations/asset/' + assetTypeId + '?contextAssetId=' + assetId + '&numItems=' + limit)).then(d => d.data);
 }
 
+export const getBadgesForPlace = async ({ placeId, limit = 10 }) => {
+  let url = `/v1/badges/asset/${placeId}?limit=${limit}`;
+  return request('GET', getFullUrl('catalog', url)).then(d => d.data);
+};
+
+export const getPassessForPlace = async ({ placeId, limit = 10, cursor }) => {
+  let url = `/v1/passes/asset/${placeId}?limit=${limit}`;
+  return request('GET', getFullUrl('catalog', url)).then(d => d.data);
+};
+
 export const getComments = async ({ assetId, offset }) => {
   return request('GET', getBaseUrl() + 'comments/get-json?assetId=' + assetId + '&startIndex=' + offset + '&thumbnailWidth=100&thumbnailHeight=100&thumbnailFormat=PNG&cachebuster=' + Math.random()).then(d => d.data);
 }

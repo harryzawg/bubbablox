@@ -823,6 +823,16 @@ public class AssetsService : ServiceBase, IService
             assetVersionId = id,
         };
     }
+	
+	public async Task<bool> DoesUserOwnAsset(long userId, long assetId)
+	{
+		var count = await db.QuerySingleOrDefaultAsync<int>(
+			"SELECT COUNT(*) FROM user_asset WHERE user_id = :userId AND asset_id = :assetId",
+			new { userId, assetId }
+		);
+
+		return count > 0;
+	}
 
     private async Task UpdateAsset(long assetId)
     {
@@ -889,7 +899,7 @@ public class AssetsService : ServiceBase, IService
 	public async Task<Dto.Assets.CreateResponse> CreateAsset(string name, string? description, long creatorUserId,
 		CreatorType creatorType, long creatorId, Stream? content, Models.Assets.Type assetType,
 		Models.Assets.Genre genre, Models.Assets.ModerationStatus moderationStatus, DateTime? createdAt = null,
-		DateTime? updatedAt = null, long? robloxAssetId = 0, bool disableRender = false, long? contentId = null, long? assetIdOverride = null)
+		DateTime? updatedAt = null, long? robloxAssetId = 0, bool disableRender = false, long? contentId = null, long? assetIdOverride = null, bool skipHashCheck = false)
 	{
 		ValidateNameAndDescription(name, description);
 
@@ -915,7 +925,8 @@ public class AssetsService : ServiceBase, IService
 		await InTransaction(async (trans) =>
 		{
 			// check if item was already uploaded before. if true, we can skip moderation check
-			if (moderationStatus == ModerationStatus.AwaitingApproval)
+			// skip hash check is for badges and passes cause they need the moderate endpoint to set the thumb
+			if (moderationStatus == ModerationStatus.AwaitingApproval && !skipHashCheck)
 			{
 				AssetModerationEntry? previouslyUploaded = null;
 				if (contentKey != null)
@@ -1154,6 +1165,12 @@ public class AssetsService : ServiceBase, IService
             new {asset_id = assetId});
         return result;
     }
+	
+	public async Task<bool> DoesAssetExist(long assetId)
+	{
+		var entry = (await MultiGetInfoById(new List<long> { assetId })).ToList();
+		return entry.Count > 0;
+	}
 
     public async Task<MultiGetEntry> GetAssetCatalogInfo(long assetId)
     {
@@ -1571,18 +1588,22 @@ WHERE asset_type = :asset_type AND asset.id < :id AND NOT asset.is_18_plus ORDER
         if (assets.Count == 0) return new List<MultiGetAssetDeveloperDetails>();
 
         var builder = new SqlBuilder();
-        var selectTemplate = builder.AddTemplate(
-            "SELECT id as assetId, asset_type as typeId, asset_genre as genre, creator_type as creatorType, creator_id as creatorId, name, description, created_at as created, updated_at as updated, comments_enabled as enableComments, asset.moderation_status as moderationStatus, asset.is_18_plus as is18Plus FROM asset /**where**/");
+		var selectTemplate = builder.AddTemplate(
+		"SELECT a.id as assetId, a.asset_type as typeId, a.asset_genre as genre, a.creator_type as creatorType, a.creator_id as creatorId, a.name, a.description, a.created_at as created, a.updated_at as updated, a.comments_enabled as enableComments, a.moderation_status as moderationStatus, a.is_18_plus as is18Plus, apb.place_id as badgePlaceId, app.place_id as passPlaceId, place_asset.name as placeName FROM asset a LEFT JOIN asset_place_badge apb ON a.id = apb.badge_id LEFT JOIN asset_place_pass app ON a.id = app.pass_id LEFT JOIN asset place_asset ON (apb.place_id IS NOT NULL AND place_asset.id = apb.place_id) OR (app.place_id IS NOT NULL AND place_asset.id = app.place_id) /**where**/");
         for (var i = 0; i < assets.Count; i++)
         {
             var sqlParams = new DynamicParameters();
             sqlParams.Add("param" + i, assets[i]);
-            builder.OrWhere("id = @param" + i, sqlParams);
+            builder.OrWhere("a.id = @param" + i, sqlParams);
         }
 
         var result =
             await db.QueryAsync<MultiGetAssetDeveloperDetailsDb>(selectTemplate.RawSql, selectTemplate.Parameters);
-        return result.Select(c => new MultiGetAssetDeveloperDetails(c));
+		return result.Select(c => new MultiGetAssetDeveloperDetails(c)
+		{
+			placeId = (c.typeId == 21) ? c.badgePlaceId : (c.typeId == 34) ? c.passPlaceId : null,
+			placeName = (c.typeId == 21 || c.typeId == 34) ? c.placeName : null
+		});
     }
 
     public async Task UpdateAsset(long assetId, string? description, string name, Genre genre,
@@ -1703,7 +1724,7 @@ WHERE asset_type = :asset_type AND asset.id < :id AND NOT asset.is_18_plus ORDER
     public async Task<bool> CanUserModifyItem(long assetId, long userId)
     {
         // todo: move IsOwner() to service
-        if (userId == 3) return true;
+        if (userId == 1) return true;
         
         var details = await GetAssetCatalogInfo(assetId);
         switch (details.creatorType)
@@ -2518,7 +2539,68 @@ WHERE asset_type = :asset_type AND asset.id < :id AND NOT asset.is_18_plus ORDER
             action = newStatus,
         });
     }
+	
+	public async Task InsertBadge(long badgeId, long placeId, long userId)
+	{
+		await ValidatePermissions(placeId, userId);
+		
+		var Place = await GetAssetCatalogInfo(placeId);
+		if (Place.assetType != Type.Place)
+		{
+			throw new ArgumentException("Asset is not a place");
+		}
+		
+		await InsertAsync("asset_place_badge", new
+		{
+			badge_id = badgeId,
+			place_id = placeId,
+		});
+	}
+	
+	public async Task InsertPass(long passId, long placeId, long userId)
+	{
+		await ValidatePermissions(placeId, userId);
+		
+		var Place = await GetAssetCatalogInfo(placeId);
+		if (Place.assetType != Type.Place)
+		{
+			throw new ArgumentException("Asset is not a place");
+		}
+		
+		await InsertAsync("asset_place_pass", new
+		{
+			pass_id = passId,
+			place_id = placeId,
+		});
+	}
+	
+	public async Task<bool> IsBadgeAssociatedWithPlace(long badgeId, long placeId)
+	{
+		var result = await db.QuerySingleOrDefaultAsync<Dto.Total>(
+			"SELECT COUNT(*) AS total FROM asset_place_badge WHERE badge_id = :badgeId AND place_id = :placeId",
+			new { badgeId, placeId });
+		
+		return result.total > 0;
+	}
+	
+	public async Task<IEnumerable<MultiGetEntry>> GetBadgesForPlace(long placeId)
+	{
+		var badgeIds = await db.QueryAsync<long>(
+			"SELECT badge_id FROM asset_place_badge WHERE place_id = :placeId",
+			new { placeId });
+		
+		return await MultiGetInfoById(badgeIds);
+	}
 
+	public async Task<IEnumerable<MultiGetEntry>> GetPassesForPlace(long placeId)
+	{
+		var passIds = await db.QueryAsync<long>(
+			"SELECT pass_id FROM asset_place_pass WHERE place_id = :placeId",
+			new { placeId });
+		
+		return await MultiGetInfoById(passIds);
+	}
+	
     public bool IsThreadSafe()
     {
         return true;

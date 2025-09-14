@@ -1,3 +1,0 @@
-<FilesMatch "\.ashx$">
-    SetHandler application/x-httpd-php
-</FilesMatch>

@@ -24,6 +24,7 @@ namespace Roblox.Rendering
 		private static Dictionary<int, Process> rccProcesses { get; } = new();
         private static Random random { get; } = new();
         private static object rccLock { get; } = new();
+		private static SemaphoreSlim R15RenderLock { get; } = new(1, 1);
 		private static Process? rccProcess;
 		private static int? rccPort;
 
@@ -406,11 +407,20 @@ namespace Roblox.Rendering
 				throw;
 			}
 		}
-		
+
 		public static async Task<Stream> RequestPlayerThumbnailR15(long userId, CancellationToken? cancellationToken = null)
-        {
-            return await RenderR15(userId, "Avatar_R15_Action", cancellationToken);
-        }
+		{
+			await R15RenderLock.WaitAsync(cancellationToken ?? CancellationToken.None);
+			
+			try
+			{
+				return await RenderR15(userId, "Avatar_R15_Action", cancellationToken);
+			}
+			finally
+			{
+				R15RenderLock.Release();
+			}
+		}
 
         public static async Task<Stream> RequestPlayerThumbnail(AvatarData data, CancellationToken? cancellationToken = null)
         {

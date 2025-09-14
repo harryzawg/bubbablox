@@ -149,26 +149,31 @@ const ProfileHeader = props => {
   const showButtons = auth.userId != store.userId && !auth.isPending;
 
   const BcIcon = () => {
-    if (bcLevel === 0) {
-      return null;
-    }
-    // 1 = BC
-    // 2 = TBC
-    // 3 = OBC
-    // 4 = Premium
-    // 0 = None
-    switch(bcLevel) {
-      case 1:
-      case 4:
-        return <span className="icon-bc" />
-      case 2:
-        return <span className="icon-tbc" />
-      case 3:
-        return <span className="icon-obc" />
-      default:
-        return null;
-    }
-  }
+    if (bcLevel === 0 && !store.isVerified) {
+	  return null;
+	  }
+
+	  const RenderBCIcon = () => {
+		switch(bcLevel) {
+		  case 1:
+		  case 4:
+			return <span className="icon-bc" />
+		  case 2:
+			return <span className="icon-tbc" />
+		  case 3:
+			return <span className="icon-obc" />
+		  default:
+			return null;
+		}
+	  };
+
+	  return (
+		<>
+		  {store.isVerified && <img src="/verified.svg" alt="Verified" style={{width: '20px', height: '20px', marginRight: '5px'}} />}
+		  {bcLevel !== 0 && RenderBCIcon()}
+		</>
+	  );
+	}
 
   return <div className='row mt-2'>
     <div className='col-12'>

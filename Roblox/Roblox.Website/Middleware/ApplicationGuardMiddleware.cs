@@ -51,6 +51,8 @@ public class ApplicationGuardMiddleware
         "/game/validateticket.ashx",
         "/game/get-join-script-debug",
 		"/game/get-data",
+		"/game/gamepass/gamepasshandler.ashx",
+		"/game/luawebservice/handlesocialrequest.ashx",
         "/api/moderation/filtertext",
 		"/api/thumbnail"
         // for forums or they don't work properly

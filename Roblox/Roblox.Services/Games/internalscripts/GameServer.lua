@@ -7,6 +7,7 @@ local placeId = %placeId%;
 local FakePlace = 1818;
 local creatorType = Enum.CreatorType.User;
 local creatorId = %creatorId%;
+local apiKey = "%apiKey%";
 
 ------------------- VARIABLES -------------------
 local serverOk = false
@@ -63,6 +64,18 @@ if url then
 	pcall(function() game:GetService("ContentProvider"):SetBaseUrl(url .. "/") end)
 	--pcall(function() game:GetService("Players"):SetChatFilterUrl(url .. "/Game/ChatFilter.ashx") end)
 	game:GetService("BadgeService"):SetPlaceId(placeId)
+	game:GetService("BadgeService"):SetAwardBadgeUrl(
+		url .. "/Game/Badge/Award.ashx?UserID=%d&BadgeID=%d&PlaceID=%d"
+	)
+	game:GetService("BadgeService"):SetHasBadgeUrl(
+		url .. "/Game/Badge/HasBadge.ashx?UserID=%d&BadgeID=%d"
+	)
+	-- game:GetService("BadgeService"):setIsBadgeDisabledUrl(
+		-- url .. "/Game/Badge/HasBadge.ashx?UserID=%d&BadgeID=%d"
+	-- )
+	-- game:GetService("BadgeService"):setIsBadgeLegalUrl(
+		-- url .. "/Game/Badge/HasBadge.ashx?UserID=%d&BadgeID=%d"
+	-- )
 	game:GetService("InsertService"):SetBaseSetsUrl(url .. "/Game/Tools/InsertAsset.ashx?nsets=10&type=base")
 	game:GetService("InsertService"):SetUserSetsUrl(url .. "/Game/Tools/InsertAsset.ashx?nsets=20&type=user&userid=%d")
 	game:GetService("InsertService"):SetCollectionUrl(url .. "/Game/Tools/InsertAsset.ashx?sid=%d")
@@ -317,7 +330,7 @@ if placeId and url then
 	end
 
 	local ok, err = pcall(function()
-		game:Load("rbxasset://"..placeId..".rbxl")
+		game:Load(url .. "/Asset/?id=" .. placeId .. "&apiKey=" .. apiKey)
 		fixconnect(game)
 	end)
 

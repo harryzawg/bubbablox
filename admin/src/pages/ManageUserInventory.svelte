@@ -11,8 +11,12 @@
 
 	let removeItemsListOpen = false;
 	let ownedUserAssets: { asset_id: number; name: string; user_asset_id: number }[] = null;
+	let ownedNonLimitedAssets: { asset_id: number; name: string; user_asset_id: number }[] = [];
 	request.get("/user-collectibles?userId=" + userId).then((userassets) => {
 		ownedUserAssets = userassets.data;
+	});
+	request.get("/user-items?userId=" + userId).then((res) => {
+		ownedNonLimitedAssets = res.data;
 	});
 	import * as rank from "../stores/rank";
     rank.promise.then(() => {
@@ -55,7 +59,8 @@
 			>
 			{#if removeItemsListOpen}
 				<div class="mt-2 row" style="max-height: 400px; overflow-y: auto;">
-					{#if ownedUserAssets !== null}
+					{#if ownedUserAssets || ownedNonLimitedAssets}
+						<h3 class="mt-3 mb-2 text-center" style="font-weight: bold; font-size: 1.5rem; border-bottom: 2px solid black;">LIMITEDS</h3>
 						{#each ownedUserAssets as item}
 							<div
 								class={`col-6 col-md-3 col-lg-2 ${userAssetsToRemove.find((v) => v.userAssetId === item.user_asset_id) ? "border" : ""}`}
@@ -63,22 +68,34 @@
 								on:click={() => {
 									let name = item.name;
 									let uaid = item.user_asset_id;
-									let exists = userAssetsToRemove.find((v) => {
-										return v.userAssetId === uaid;
-									});
+									let exists = userAssetsToRemove.find((v) => v.userAssetId === uaid);
 									if (!exists) {
-										userAssetsToRemove = [
-											{
-												userAssetId: uaid,
-												name: name,
-												assetId: item.asset_id,
-											},
-											...userAssetsToRemove,
-										];
+										userAssetsToRemove = [{ userAssetId: uaid, name, assetId: item.asset_id }, ...userAssetsToRemove];
 									} else {
-										userAssetsToRemove = userAssetsToRemove.filter((v) => {
-											return v.userAssetId !== uaid;
-										});
+										userAssetsToRemove = userAssetsToRemove.filter((v) => v.userAssetId !== uaid);
+										userAssetsToRemove = [...userAssetsToRemove];
+									}
+								}}
+							>
+								<img style="width: 100%;" src={`/thumbs/asset.ashx?assetId=${item.asset_id}&width=420&height=420&format=png`} alt="Item" />
+								<p class="text-truncate pb-0 mb-0">{item.name}</p>
+								<p class="text-truncate mt-0">UAID #{item.user_asset_id}</p>
+							</div>
+						{/each}
+
+						<h3 class="mt-4 mb-2 text-center" style="font-weight: bold; font-size: 1.5rem; border-bottom: 2px solid black;">ITEMS</h3>
+						{#each ownedNonLimitedAssets as item}
+							<div
+								class={`col-6 col-md-3 col-lg-2 ${userAssetsToRemove.find((v) => v.userAssetId === item.user_asset_id) ? "border" : ""}`}
+								style="cursor: pointer;"
+								on:click={() => {
+									let name = item.name;
+									let uaid = item.user_asset_id;
+									let exists = userAssetsToRemove.find((v) => v.userAssetId === uaid);
+									if (!exists) {
+										userAssetsToRemove = [{ userAssetId: uaid, name, assetId: item.asset_id }, ...userAssetsToRemove];
+									} else {
+										userAssetsToRemove = userAssetsToRemove.filter((v) => v.userAssetId !== uaid);
 										userAssetsToRemove = [...userAssetsToRemove];
 									}
 								}}

@@ -53,7 +53,7 @@ const FriendEntry = props => {
           <PlayerImage id={props.id} name={props.name} useHeadshot={true} width={85} height={85}/>
         </div>
         {onlineStatus && <div className={s.activityWrapper}><Activity {...onlineStatus}/></div>}
-        <p className={s.username}>{props.name}</p>
+        <p className={s.username}>{props.name} {props.isVerified && <img src="/verified.svg" alt="Verified" style={{width: '18px', height: '18px', marginLeft: '3px'}} />}</p>
       </a>
     </Link>
   </div>

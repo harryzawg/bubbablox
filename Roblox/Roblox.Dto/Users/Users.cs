@@ -41,6 +41,7 @@ public class UserInfo
     public bool isAdmin { get; set; }
     public bool isModerator { get; set; }
     public string description { get; set; }
+	public bool isVerified { get; set; }
 
     public bool IsDeleted()
     {

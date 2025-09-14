@@ -236,10 +236,10 @@ public class GamesService : ServiceBase, IService
 
     public async Task SetMaxPlayerCount(long placeId, int maxPlayerCount)
     {
-        if (maxPlayerCount < 10)
-            throw new RobloxException(400, 0, "Max player count cannot be below 10");
-        if (maxPlayerCount > 20)
-            throw new RobloxException(400, 0, "Max player count cannot exceed 20");
+        if (maxPlayerCount < 1)
+            throw new RobloxException(400, 0, "Max player count cannot be below 1");
+        if (maxPlayerCount > 30)
+            throw new RobloxException(400, 0, "Max player count cannot exceed 30");
         
         await db.ExecuteAsync("UPDATE asset_place SET max_player_count = :max WHERE asset_id = :id", new
         {
@@ -304,6 +304,27 @@ public class GamesService : ServiceBase, IService
 			year = year,
 		});
 	}
+	
+	public async Task<string?> GetRigType(long placeId)
+	{
+		var result = await db.QuerySingleOrDefaultAsync<string ?>(
+			"SELECT rig_type FROM asset_place WHERE asset_id = :rigType",
+			new { rigType = placeId });
+			
+		return result;
+	}
+	
+	public async Task SetRigType(long placeId, string rigType)
+	{
+		if (rigType != "MorphToR6" && rigType != "MorphToR15" && rigType != "playerChoice" && rigType != "PlayerChoice")
+			throw new RobloxException(400, 0, "Rig Type must be MorphToR6, MorphToR15 or PlayerChoice");
+		
+		await db.ExecuteAsync("UPDATE asset_place SET rig_Type = @rigType WHERE asset_id = @id", new
+		{
+			id = placeId,
+			rigType = rigType,
+		});
+	}
 
     public async Task<IEnumerable<PlaceEntry>> MultiGetPlaceDetails(IEnumerable<long> placeIds)
     {
@@ -313,7 +334,7 @@ public class GamesService : ServiceBase, IService
 
         var query = new SqlBuilder();
         var temp = query.AddTemplate(
-            "SELECT asset.id as universeRootPlaceId, asset.creator_id as builderId, asset.creator_type as builderType, universe_asset.universe_id as universeId, asset.name, asset.id as placeId, asset.description as description, asset.asset_genre as genre, (select count(*) as playerCount FROM asset_server_player WHERE asset_server_player.asset_id = asset.id), (case when \"asset\".creator_type = 1 then \"user\".username else \"group\".name end) as builder, asset.created_at as created, asset.updated_at as updated, asset_place.max_player_count as maxPlayerCount, asset_place.gear_permission as gearPermissions, asset_place.year as year, asset.asset_genre as genre, asset.moderation_status as moderationStatus, asset_place.playable as isPlayable FROM asset INNER JOIN universe_asset ON universe_asset.asset_id = asset.id INNER JOIN asset_place ON asset_place.asset_id = asset.id LEFT JOIN \"group\" ON \"group\".id = asset.creator_id AND asset.creator_type = 2 LEFT JOIN \"user\" ON \"user\".id = asset.creator_id AND asset.creator_type = 1 /**where**/ /**orderby**/ LIMIT 100");
+            "SELECT asset.id as universeRootPlaceId, asset.creator_id as builderId, asset.creator_type as builderType, universe_asset.universe_id as universeId, asset.name, asset.id as placeId, asset.description as description, asset.asset_genre as genre, (select count(*) as playerCount FROM asset_server_player WHERE asset_server_player.asset_id = asset.id), (case when \"asset\".creator_type = 1 then \"user\".username else \"group\".name end) as builder, asset.created_at as created, asset.updated_at as updated, asset_place.max_player_count as maxPlayerCount, asset_place.gear_permission as gearPermissions, asset_place.year as year, asset_place.rig_type as rigType, asset.asset_genre as genre, asset.moderation_status as moderationStatus, asset_place.playable as isPlayable FROM asset INNER JOIN universe_asset ON universe_asset.asset_id = asset.id INNER JOIN asset_place ON asset_place.asset_id = asset.id LEFT JOIN \"group\" ON \"group\".id = asset.creator_id AND asset.creator_type = 2 LEFT JOIN \"user\" ON \"user\".id = asset.creator_id AND asset.creator_type = 1 /**where**/ /**orderby**/ LIMIT 100");
 
         foreach (var id in ids)
         {

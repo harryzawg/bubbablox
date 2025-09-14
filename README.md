@@ -75,7 +75,7 @@ you should change GameServerAuthorization and the Authorization under Render in 
 - the reason for this is the way that RCC was compiled, it was set to use Roblox's domain which is 10 characters. just replace it with your 10 char domain (CTRL + R, then do bb.zawg.ca then replace it with your domain. make sure your direction is all)
 - the only thing, is that you should search for ```NS1``` after closing the replace window and pressing ctrl + F and replacing your domain/bb.zawg.ca with roblox.com for each ns. so replace your.domain/bb.zawg.ca in ns1, with roblox.com and so on until ns3. [example](https://zawg.ca/assets/photos/demo1.png)
 - do the same for the client, except the roblox NS patch as it is not needed for the client. change your public key and your private key, everything related to it.
-- you can easily find guides/tools for it. if you do, do the same for the webserver.
+- you can easily find guides/tools for it. if you do, change the keys in the RSA Folder in Roblox/Roblox.Website.
 - also, change the domain in AppSettings.xml to your domain. (for client and RCC)
 
 ## the site should be setup at this point!
@@ -86,16 +86,7 @@ you should change GameServerAuthorization and the Authorization under Render in 
 
 **congrats, site is setup and made!**
 
-## webserver
-
-- change the directory root in ```webserver\apache\conf\extra\httpd-vhosts.conf``` to your actual webserver root location.
-- update everything in ```webserver\apache\conf\httpd.conf``` to your actual server root and directory locations.
-- go into ```webserver/root/game``` then go into join.ashx and change the bs.zawg.ca and sitetest.zawg.ca URL's to your website URL. so sitetest/bs.zawg.ca should just look like your domain. go through every file and change it.
-- do the same for PlaceLauncher.ashx and the asset endpoints, so it can actually get assets from your site in game.
-- you should now be able to start the webserver, (```webserver\apache\bin\httpd.exe```) and connect using the client. (the webserver is required for Roblox assets as well, so make sure to start it!!)
-
 ## client
 
-- start the webserver
-- patch the client in HxD, the same way as RCC, then go to /game/get-join-script?placeid=(the place you want to join)
+- patch the client in HxD, the same way as RCC (except NS patch), then go to /game/get-join-script?placeid=(the place you want to join)
 - then go to the client's directory in CMD using CD, then do CLIENTNAME.exe (paste everything in the get join script endpoint after the client exe)

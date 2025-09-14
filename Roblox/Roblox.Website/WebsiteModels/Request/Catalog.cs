@@ -60,6 +60,16 @@ public class UploadAssetRequest
     public IFormFile file { get; set; }
 }
 
+public class UploadAssetRequestBadges
+{
+    public string name { get; set; }
+	public string? description { get; set; } = "No description provided.";
+    public Type assetType { get; set; }
+	public long? placeId { get; set; } = null;
+    public long? groupId { get; set; } = null;
+    public IFormFile file { get; set; }
+}
+
 public class UploadAssetVersionRequest
 {
     public long assetId { get; set; }

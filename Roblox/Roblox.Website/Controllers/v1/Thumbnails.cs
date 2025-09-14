@@ -271,6 +271,12 @@ public class ThumbnailsControllerV1 : ControllerBase
 				{
 					existing.imageUrl = existing.imageUrl.Replace("/images/thumbnails//images/thumbnails/", "/images/thumbnails/");
 				}
+				
+				if (existing.state == ThumbnailState.Pending)
+				{
+					existing.imageUrl = "/img/placeholder.png";
+				}
+				
 				result.Add(existing);
 			}
 			else

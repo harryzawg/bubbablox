@@ -37,12 +37,14 @@ using Roblox.Models.Trades;
 using Roblox.Models.Users;
 using Roblox.Models.Promocodes;
 using Roblox.Models.Thumbnails;
+using Roblox.Services;
 using Roblox.Services.App.FeatureFlags;
 using Roblox.Services.Exceptions;
 using Roblox.Website.Filters;
 using Roblox.Website.WebsiteModels.Asset;
 using Roblox.Website.WebsiteModels.Admin.MigrateUGC;
 using Roblox.Website.WebsiteModels.Admin.Thumbnails;
+using Roblox.Website.WebsiteModels.Admin.Verified;
 using Type = Roblox.Models.Assets.Type;
 
 // ReSharper disable InconsistentNaming
@@ -761,6 +763,7 @@ public class AdminApiController : ControllerBase
 		}
 
 		// re-render the next asset if the approved asset is an image and the next asset is a teeshirt, pants, or shirt
+		// update badge/gamepass thumbnail to the image's thumb if the next asset is either badge or gamepass
 		if (request.isApproved && newStatus == ModerationStatus.ReviewApproved)
 		{
 			var assetdetails = await services.assets.GetAssetCatalogInfo(request.assetId);
@@ -774,9 +777,44 @@ public class AdminApiController : ControllerBase
 					
 					var nextid = request.assetId + 1;
 					var nextdetails = await services.assets.GetAssetCatalogInfo(nextid);
-					if (nextdetails != null && (nextdetails.assetType == Type.TeeShirt || nextdetails.assetType == Type.Pants || nextdetails.assetType == Type.Shirt))
+					if (nextdetails != null)
 					{
-						services.assets.RenderAsset(nextid, nextdetails.assetType);
+						if (nextdetails.assetType == Type.TeeShirt || nextdetails.assetType == Type.Pants || nextdetails.assetType == Type.Shirt)
+						{
+							services.assets.RenderAsset(nextid, nextdetails.assetType);
+						}
+						else if (nextdetails.assetType == Type.Badge || nextdetails.assetType == Type.GamePass)
+						{
+							var ContentURL = await db.QuerySingleOrDefaultAsync<string>(
+								"SELECT content_url FROM asset_version WHERE asset_id = :id ORDER BY id DESC LIMIT 1",
+								new { id = request.assetId }
+							);
+
+							if (!string.IsNullOrEmpty(ContentURL))
+							{
+								await db.ExecuteAsync(
+									@"INSERT INTO asset_thumbnail (asset_id, asset_version_id, content_url, moderation_status)
+									  VALUES (:assetId, :assetVersionId, :contentUrl, :moderationStatus)",
+									new
+									{
+										assetId = nextid,
+										assetVersionId = nextid,
+										contentUrl = ContentURL,
+										moderationStatus = newStatus
+									}
+								);
+
+								Console.WriteLine($"Set badge/gamepass {nextid}'s cont url to image {request.assetId}'s content URL");
+							}
+							else
+							{
+								Console.WriteLine($"no content URL found for image {request.assetId}");
+							}
+						}
+					}
+					else
+					{
+						Console.WriteLine($"asset {nextid} not found");
 					}
 				});
 			}
@@ -1095,7 +1133,8 @@ public class AdminApiController : ControllerBase
         {
             type = PurchaseType.Commission,
             currency_type = CurrencyType.Robux,
-            amount = 15,
+			// Stupid
+            amount = 0,
             // details
             sub_type = TransactionSubType.StaffAssetModeration,
             // user data
@@ -1270,6 +1309,14 @@ public class AdminApiController : ControllerBase
 		};
 	}
 	
+	// stupid helper function cause GetUserById has a cache or something and doesn't update
+	public async Task<bool> GetUserVerified(long userId)
+	{
+		return await db.ExecuteScalarAsync<bool>(
+			"SELECT verified FROM \"user\" WHERE id = :userId",
+			new { userId });
+	}
+	
     [HttpGet("user"), StaffFilter(Access.GetUserDetailed)]
     public async Task<dynamic> GetUserInfoDetailed(long userId)
     {
@@ -1298,8 +1345,37 @@ public class AdminApiController : ControllerBase
         result.invite = (object?) joinInvite;
         result.joinApp = (object?) joinApp;
         result.year = year.ToString();
+		result.verified = (object)await GetUserVerified(userId);
         return result;
     }
+	
+	[HttpPost("users/verify"), StaffFilter(Access.GiveUserBadge)]
+	public async Task<dynamic> ToggleUserVerifiedStatus([Required, FromBody] VerifiedReq request)
+	{	
+		await db.ExecuteAsync(
+			"UPDATE \"user\" SET verified = NOT verified WHERE id = :userId",
+			new { userId = request.userId });
+			
+		var Status = await db.ExecuteScalarAsync<bool>(
+			"SELECT verified FROM \"user\" WHERE id = :userId",
+			new { userId = request.userId });
+			
+		// add this
+/* 		await db.ExecuteAsync(
+			"INSERT INTO moderation_toggle_verified (user_id, actor_id, new_status) VALUES (:userId, :actorId, :Status)",
+			new 
+			{
+				userId = request.userId,
+				actorId = userSession.userId,
+				Status = !userInfo.isVerified
+			}); */
+		
+		return new
+		{
+			success = true,
+			isVerified = Status
+		};
+	}
 	
 	// HASHED. not real ips.
 	[HttpGet("users/alts"), StaffFilter(Access.GetUsersList)]
@@ -1334,6 +1410,9 @@ public class AdminApiController : ControllerBase
 			{
 				for (int j = i + 1; j < users.Count; j++)
 				{
+					if (users[i].user_id == 1 || users[j].user_id == 1)
+						continue;
+					
 					if (users[i].status == 1 || users[j].status == 1)
 					{
 						containers.Add(containernum, new
@@ -2192,6 +2271,12 @@ public class AdminApiController : ControllerBase
             new { user_id = userId })).ToList();
         return result;
     }
+	
+	[HttpGet("user-items"), StaffFilter(Access.GetUserCollectibles)]
+	public async Task<dynamic> GetUsetItems(long userId) =>
+    (await db.QueryAsync("SELECT asset_id, user_asset.id as user_asset_id, asset.name FROM user_asset INNER JOIN asset ON asset.id = user_asset.asset_id WHERE user_asset.user_id = :user_id AND asset.is_limited = false AND asset.is_limited_unique = false", 
+		new { user_id = userId })).ToList();
+
 
     [HttpPost("removeitem"), StaffFilter(Access.RemoveUserItem)]
     public async Task RemoveItem([Required, FromBody] RemoveItemRequest request)
@@ -2723,7 +2808,7 @@ Thank you for your understanding,
 			});
 	}
 
-	[HttpPost("bundle/copy-from-roblox"), StaffFilter(Access.CreateBundleCopiedFromRoblox)]
+	[HttpPost("bundle/copy-from-robloxStupidAndSucks"), StaffFilter(Access.CreateBundleCopiedFromRoblox)]
     public async Task<dynamic> CopyBundle(long bundleId)
     {
         var details = await services.robloxApi.GetBundle(bundleId);
@@ -2777,7 +2862,6 @@ Thank you for your understanding,
             description = details.description,
             genre = Genre.All,
             isForSale = false,
-			isVisible = true,
             isLimited = false,
             isLimitedUnique = false,
             maxCopies = null,
@@ -4449,22 +4533,231 @@ Thank you for your understanding,
 
         return response;
     }
+	
+	// move to DTO when working
+	public class ShutdownGSReq
+	{
+		public string ServerId { get; set; }
+	}
 
-    [HttpGet("game-servers/list")]
-    [StaffFilter(Access.GetGameServers)]
-    public async Task<dynamic> GetGameServers()
-    {
-        var result = await services.gameServer.GetAllGameServers();
-        var l = new List<dynamic>();
-        foreach (var item in result)
-        {
-            l.Add(new
+	public class KillRCCReq
+	{
+		public int ProcessId { get; set; }
+	}
+		
+	[HttpGet("game-servers/running"), StaffFilter(Access.ManageRunningGameServers)]
+	public async Task<dynamic> GetRunningGameServers()
+	{
+		var servers = new List<dynamic>();
+		
+		foreach (var kvp in services.gameServer.JobRccs)
+		{
+			var jobId = kvp.Key;
+			var process = kvp.Value;
+			var placeId = GameServerService.GetPlaceIdByJobId(jobId);
+			
+			var ServerInfo = await db.QueryFirstOrDefaultAsync<dynamic>(
+				"SELECT asset_id, port, created_at, updated_at FROM asset_server WHERE id = :id::uuid",
+				new { id = jobId });
+				
+			var Players = await db.QueryFirstOrDefaultAsync<Total>(
+				"SELECT COUNT(*) as total FROM asset_server_player WHERE server_id = :id::uuid",
+				new { id = jobId });
+				
+			var Place = "Unknown";
+			if (placeId > 0)
+			{
+				var PlaceInfo = await db.QueryFirstOrDefaultAsync<dynamic>(
+					"SELECT name FROM asset WHERE id = :id",
+					new { id = placeId });
+				Place = PlaceInfo?.name ?? "Unknown";
+			}
+			
+			servers.Add(new
+			{
+				JobId = jobId,
+				PlaceId = placeId,
+				PlaceName = Place,
+				Port = ServerInfo?.port ?? -1,
+				ProcessId = process.Id,
+				MemoryUsage = process.WorkingSet64 / 1024 / 1024,
+				StartTime = process.StartTime,
+				PlayerCount = Players?.total ?? 0,
+				CreatedAt = ServerInfo?.created_at,
+				LastPing = ServerInfo?.updated_at
+			});
+		}
+		
+		return servers;
+	}
+
+	[HttpPost("game-servers/shutdown"), StaffFilter(Access.ManageRunningGameServers)]
+	public async Task<dynamic> ShutdownGameServer([Required, FromBody] ShutdownGSReq request)
+	{
+		try
+		{
+			services.gameServer.ShutDownServer(request.ServerId);
+			Task.Delay(1000);
+			
+			var Players = await db.QueryFirstOrDefaultAsync<Total>(
+                "SELECT COUNT(*) as total FROM asset_server_player WHERE server_id = :id::uuid",
+                new { id = request.ServerId });
+            
+            if (Players != null && Players.total > 0)
             {
-                server = item.Item2,
-                games = item.Item1,
-            });
-        }
+                await db.ExecuteAsync(
+                    "DELETE FROM asset_server_player WHERE server_id = :id::uuid",
+                    new { id = request.ServerId });
+			}		
+			
+			return new
+			{
+				Success = true,
+				Message = $"Server {request.ServerId} shutdown successfully"
+			};
+		}
+		catch (Exception ex)
+		{
+			return new
+			{
+				Success = false,
+				Message = $"Failed to shutdown server: {ex.Message}"
+			};
+		}
+	}
 
-        return l;
-    }
+	[HttpGet("RCC-internal/rcc-processes"), StaffFilter(Access.ManageRCCInstances)]
+	public dynamic GetRCCProcesses()
+	{
+		var processes = new List<dynamic>();
+		
+		foreach (var kvp in services.gameServer.JobRccs)
+		{
+			var process = kvp.Value;
+			
+			try
+			{
+				processes.Add(new
+				{
+					ProcessId = process.Id,
+					JobId = kvp.Key,
+					ProcessName = process.ProcessName,
+					MemoryUsageMB = process.WorkingSet64 / 1024 / 1024,
+					StartTime = process.StartTime,
+					TotalProcessorTime = process.TotalProcessorTime,
+					Responding = process.Responding,
+					HasExited = process.HasExited
+				});
+			}
+			catch (Exception ex)
+			{
+				// Process might have exited already
+				processes.Add(new
+				{
+					ProcessId = -1,
+					JobId = kvp.Key,
+					ProcessName = "Unknown",
+					MemoryUsageMB = 0,
+					StartTime = DateTime.MinValue,
+					TotalProcessorTime = TimeSpan.Zero,
+					Responding = false,
+					HasExited = true,
+					Error = ex.Message
+				});
+			}
+		}
+		
+		return processes;
+	}
+
+	[HttpPost("RCC-Internal/rcc-processes/kill"), StaffFilter(Access.ManageRCCInstances)]
+	public dynamic KillRCCProcess([Required, FromBody] KillRCCReq request)
+	{
+		try
+		{
+			var process = services.gameServer.JobRccs.Values.FirstOrDefault(p => p.Id == request.ProcessId);	
+			
+			if (process == null)
+			{
+				return new
+				{
+					Success = false,
+					Message = $"Process with ID {request.ProcessId} not found"
+				};
+			}
+			
+			if (process.HasExited)
+			{
+				return new
+				{
+					Success = false,
+					Message = $"Process {request.ProcessId} has already exited"
+				};
+			}
+			
+			process.Kill();
+			process.WaitForExit(5000);
+			
+			var jobId = services.gameServer.JobRccs.FirstOrDefault(x => x.Value.Id == request.ProcessId).Key;
+			
+			if (!string.IsNullOrEmpty(jobId))
+			{
+				services.gameServer.ShutDownServer(jobId);
+			}
+			
+			return new
+			{
+				Success = true,
+				Message = $"Process {request.ProcessId} killed successfully"
+			};
+		}
+		catch (Exception ex)
+		{
+			return new
+			{
+				Success = false,
+				Message = $"Failed to kill process: {ex.Message}"
+			};
+		}
+	}
+
+	[HttpPost("game-servers/cleanup-orphaned"), StaffFilter(Access.ManageRunningGameServers)]
+	public async Task<dynamic> CleanupOrphanedServers()
+	{
+		int Cleaned = 0;
+		
+		var DBServers = await db.QueryAsync<dynamic>(
+			"SELECT id::text, asset_id FROM asset_server WHERE updated_at > NOW() - INTERVAL '10 minutes'");
+		
+		foreach (var server in DBServers)
+		{
+			string serverId = server.id;
+			
+			if (!services.gameServer.JobRccs.ContainsKey(serverId))
+			{
+				try
+				{
+					await db.ExecuteAsync(
+						"DELETE FROM asset_server_player WHERE server_id = :id::uuid",
+						new { id = serverId });
+					
+					await db.ExecuteAsync(
+						"DELETE FROM asset_server WHERE id = :id::uuid",
+						new { id = serverId });
+					
+					Cleaned++;
+				}
+				catch (Exception ex)
+				{
+					Writer.Info(LogGroup.AdminApi, $"Failed to cleanup orphaned server {serverId}: {ex.Message}");
+				}
+			}
+		}
+		
+		return new
+		{
+			Success = true,
+			Message = $"Cleaned up {Cleaned} orphaned servers"
+		};
+	}
 }

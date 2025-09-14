@@ -85,4 +85,7 @@ public enum Access
     GetSaleHistoryForAsset,
     RefundAndDeleteFirstPartyAssetSale,
     ManagePromocodes,
+	ManageRunningGameServers,
+	ManageRCCInstances,
+	ManageVerifiedTicks,
 }

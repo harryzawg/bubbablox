@@ -86,7 +86,12 @@
 					<div class="col-12 col-lg-4">
 						<div class="card">
 							<div class="card card-body card-header">
-								<h3 class="mb-0">{info ? info.data.username : 'Loading...'}</h3>
+								<h3 class="mb-0">
+									{info ? info.data.username : 'Loading...'}
+									{#if info.data.verified}
+										<img src="/verified.svg" alt="Verified" class="inline-block w-4 h-4 ml-1" />
+									{/if}
+								</h3>
 							</div>
 							<div class="card-body">
 								<p>
@@ -346,6 +351,37 @@
 						}}
 					>
 						<SlashIcon /> Lock Account
+					</button>
+				</Permission>
+				<Permission p="GiveUserBadge">
+					<button
+						class="btn-outline-dark btn w-100"
+						on:click={(e) => {
+							e.preventDefault();
+							if (info.data.verified) {
+								modalBody = "Please confirm that you want to unverify this user.";
+							} else {
+								modalBody = "Please confirm that you want to verify this user.";
+							}
+							modalCb = (t) => {
+								if (t) {
+									request
+										.post("/users/verify", {
+											userId,
+										})
+										.then(() => {
+											window.location.reload();
+										})
+										.catch((err) => {
+											errorMessage = err.message;
+										});
+								}
+							};
+							modalVisible = true;
+						}}
+					>
+						<img src="/verified.svg" alt="Verified" class="inline-block w-3 h-3 mr-1" />
+						{info.data.verified ? "Unverify User" : "Verify User"}
 					</button>
 				</Permission>
 				<Permission p="ResetUsername">

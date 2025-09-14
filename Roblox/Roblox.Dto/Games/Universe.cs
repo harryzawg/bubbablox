@@ -127,3 +127,8 @@ public class SetYearReq
 {
     public int year { get; set; }
 }
+
+public class SetRigTypeReq
+{
+    public string rigType { get; set; }
+}

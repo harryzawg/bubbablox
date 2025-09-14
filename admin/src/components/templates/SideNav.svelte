@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { link } from "svelte-routing";
-	import { HomeIcon, CopyIcon, UsersIcon, UserIcon, UserPlusIcon, GiftIcon, ImageIcon, DollarSignIcon, BookOpenIcon, EyeIcon, PlusCircleIcon, EditIcon, FilePlusIcon, RefreshCcwIcon, UploadCloudIcon, CheckSquareIcon, TagIcon, SunriseIcon, FlagIcon, StarIcon, BookIcon, PhoneIcon, ActivityIcon, TabletIcon, ChevronDownIcon, ChevronRightIcon } from "svelte-feather-icons";
+	import { HomeIcon, CopyIcon, UsersIcon, UserIcon, UserPlusIcon, GiftIcon, ServerIcon, CpuIcon, ImageIcon, DollarSignIcon, BookOpenIcon, EyeIcon, PlusCircleIcon, EditIcon, FilePlusIcon, RefreshCcwIcon, UploadCloudIcon, CheckSquareIcon, TagIcon, SunriseIcon, FlagIcon, StarIcon, BookIcon, PhoneIcon, ActivityIcon, TabletIcon, ChevronDownIcon, ChevronRightIcon } from "svelte-feather-icons";
 
 	import SavedPages, { addPage } from "../../stores/saved-pages";
 	import PageEntry from "../saved-pages/PageEntry.svelte";
@@ -11,6 +11,7 @@
 	let categories = {
 		users: JSON.parse(sessionStorage.getItem('nav-users') || false),
 		moderation: JSON.parse(sessionStorage.getItem('nav-moderation') || false),
+		servers: JSON.parse(sessionStorage.getItem('nav-servers') || false),
 		web: JSON.parse(sessionStorage.getItem('nav-web') || false),
 		assets: JSON.parse(sessionStorage.getItem('nav-assets') || false),
 		catalog: JSON.parse(sessionStorage.getItem('nav-catalog') || false)
@@ -87,6 +88,25 @@
 					link: '/admin/alts',
 					icon: UserIcon,
 					permission: 'GetUsersList',
+				},
+			]
+		},
+		{
+			id: "servers",
+			name: "SERVERS",
+			// icon: ServerIcon,
+			items: [
+				{
+					name: "Running Game Servers",
+					link: "/admin/game-servers/manage",
+					icon: ServerIcon,
+					permission: "ManageRunningGameServers",
+				},
+				{
+					name: 'RCC Instances',
+					link: '/admin/RCC/manage',
+					icon: CpuIcon,
+					permission: 'ManageRCCInstances',
 				},
 			]
 		},

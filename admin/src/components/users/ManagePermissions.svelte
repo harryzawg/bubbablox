@@ -184,7 +184,9 @@
 						'GetSaleHistoryForAsset',
 						'RefundAndDeleteFirstPartyAssetSale',
 						'ForceApplication',
-						'SetPermissions'
+						'SetPermissions',
+						'ManageRunningGameServers',
+						'ManageRCCInstances'
 					];
 					quickConfig(permissions);
 				}}>Owner</button>

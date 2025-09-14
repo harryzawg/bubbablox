@@ -11,6 +11,7 @@ import Friends from "./components/friends";
 import Groups from "./components/groups";
 import ProfileHeader from "./components/profileHeader";
 import RobloxBadges from "./components/robloxBadges";
+import Badges from "./components/Badges";
 import Statistics from "./components/stats";
 import Tabs from "./components/tabs";
 import TabSection from "./components/tabSection";
@@ -55,6 +56,7 @@ const UserProfile = props => {
         <Collections userId={store.userId}/>
         <Groups/>
         <Favorites userId={store.userId} />
+		<Badges userId={store.userId}/>
         <RobloxBadges userId={store.userId}/>
         <Statistics/>
       </TabSection>

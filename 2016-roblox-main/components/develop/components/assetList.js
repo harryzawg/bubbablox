@@ -28,10 +28,13 @@ const useStyles = createUseStyles({
 });
 
 const AssetEntry = props => {
+  //console.log('props:', props);
   const s = useStyles();
   const thumbs = thumbnailStore.useContainer();
   const isPlace = props.assetType === 9;
   const isAd = props.ad !== undefined && props.target !== undefined;
+  const isBadge = props.typeId === 21;
+  const isPass = props.typeId === 34;
 
   const assetUrl = isPlace ? getGameUrl({placeId: props.assetId, name: props.name}) : getItemUrl({assetId: props.assetId, name: props.name})
   const url = isPlace ? `/universes/configure?id=${props.universeId}` : assetUrl;
@@ -59,7 +62,7 @@ const AssetEntry = props => {
     },
     isPlace && {
       name: 'Create Pass',
-      url: `/develop?selectedplaceId=${props.assetId}&View=34`,
+      url: `/develop?selectedPlaceId=${props.assetId}&View=34`,
     },
     isPlace && {
       name: 'Developer Stats',
@@ -115,6 +118,13 @@ const AssetEntry = props => {
             <AssetListGameEntry url={assetUrl} startPlaceName={props.name}/>
             : <AssetListCatalogEntry created={props.created}/>
       }
+      {(isBadge || isPass) && props.placeId && props.placeName && (
+        <p className='mb-0' style={{fontSize: '14px', color: '#666'}}>
+          Target Place: <Link href={`/games/${props.placeId}/Game`}>
+            <a>{props.placeName}</a>
+          </Link>
+        </p>
+      )}
     </div>
     <div className='col-1'>
       <GearDropdown boxDropdownRightAmount={0} options={gearOptions.filter(v => !!v)}/>

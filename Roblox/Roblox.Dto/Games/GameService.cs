@@ -41,6 +41,8 @@ public class GameServerEntry
 {
     public string id { get; set; } = string.Empty;
     public long assetId { get; set; }
+	public int port { get; set; }
+	public DateTime updatedAt { get; set; }
 }
 
 public class GameServerWithUpdated : GameServerEntry

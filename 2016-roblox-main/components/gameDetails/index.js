@@ -5,6 +5,8 @@ import AdBanner from "../ad/adBanner";
 import AdSkyscraper from "../ad/adSkyscraper";
 import Comments from "../catalogDetailsPage/components/comments";
 import Recommendations from "../catalogDetailsPage/components/recommendations";
+import Badges from "../catalogDetailsPage/components/badges";
+import Passess from "../catalogDetailsPage/components/passess";
 import OldVerticalTabs from "../oldVerticalTabs";
 import GameOverview from "./components/gameOverview";
 import GameServers from "./components/gameServers";
@@ -48,6 +50,14 @@ const GameDetails = props => {
                 {
                   name: 'Commentary',
                   element: <Comments assetId={details.id}></Comments>
+                },
+				{
+                  name: 'Badges',
+                  element: <Badges assetId={details.id} assetType={21}></Badges>
+                },
+				{
+                  name: 'Game Passes',
+                  element: <Passess assetId={details.id} assetType={34}></Passess>
                 },
               ]}></OldVerticalTabs>
             </div>

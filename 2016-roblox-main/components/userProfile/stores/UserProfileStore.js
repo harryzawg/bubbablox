@@ -21,12 +21,14 @@ const UserProfileStore = createContainer(() => {
   const [createdGames, setCreatedGames] = useState(null);
   const [tab, setTab] = useState('About');
   const [isFollowing, setIsFollowing] = useState(null);
+  const [isVerified, setIsVerified] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
     getUserInfo({ userId }).then(result => {
       setUserInfo(result);
       setUsername(result.name);
+	  setIsVerified(result.isVerified || false);
     }).catch(e => {
       setLastError('InvalidUserId');
     });
@@ -82,6 +84,8 @@ const UserProfileStore = createContainer(() => {
 
     isFollowing,
     setIsFollowing,
+	
+	isVerified,
 
     getFriendStatus: (authenticatedUserId) => {
       getFriendStatus({ authenticatedUserId, userId }).then(setFriendStatus);

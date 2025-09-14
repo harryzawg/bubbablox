@@ -1,4 +1,5 @@
 import React from "react";
+import {useEffect, useState} from "react";
 import { createUseStyles } from "react-jss";
 import PlayerImage from "../../playerImage";
 import UserProfileStore from "../stores/UserProfileStore";
@@ -6,6 +7,7 @@ import useCardStyles from "../styles/card";
 import SmallButtonLink from "./smallButtonLink";
 import Subtitle from "./subtitle"
 import Link from "../../link";
+import {getUserInfo} from "../../../services/users";
 
 const useFriendStyles = createUseStyles({
   friendCol: {
@@ -57,6 +59,27 @@ const Friends = props => {
   const store = UserProfileStore.useContainer();
   const cardStyles = useCardStyles();
   const s = useFriendStyles();
+  // for tick
+  const Username = ({ userId, username }) => {
+	const [isVerified, setIsVerified] = useState(false);
+	useEffect(() => {
+	  getUserInfo({ userId })
+		.then(userInfo => {
+		  setIsVerified(userInfo.isVerified || false);
+		})
+		.catch(error => {
+		  console.error('failed to get user info:', error);
+		});
+	}, [userId]);
+
+	return (
+	  <>
+		{username}
+		{isVerified && <img src="/verified.svg" alt="Verified" style={{width: '16px', height: '16px', marginLeft: '3px'}} />}
+	  </>
+	);
+  };
+  
   if (!store.friends || store.friends.length === 0) {
     return null;
   }
@@ -81,7 +104,9 @@ const Friends = props => {
                       <div className={s.imageWrapper}>
                         <PlayerImage id={v.id} width={90} height={90} useHeadshot={true} />
                       </div>
-                      <p className={s.username}>{v.name}</p>
+					  <p className={s.username}>
+						<Username userId={v.id} username={v.name} />
+                      </p>
                     </a>
                   </Link>
                 </div>

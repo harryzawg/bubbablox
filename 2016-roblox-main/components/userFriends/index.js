@@ -154,7 +154,7 @@ const UserFriends = props => {
   useEffect(() => {
     refreshUserCount();
     refreshUsersList();
-  }, [cursor, tab]);
+  }, [cursor, tab, page]);
 
   useEffect(() => {
     if (!hasNoFriendRequests && tab === 'Friend Requests' && followEntries && followEntries.length === 0) {
@@ -169,7 +169,7 @@ const UserFriends = props => {
   if (!store.userId) return null;
   if (!friends) return null;
 
-  const arrayToUse = (tab === 'Friends' ? friends.slice((page * limit - limit), page * limit - 1) : followEntries && followEntries.data);
+  const arrayToUse = (tab === 'Friends' ? friends.slice((page - 1) * limit, page * limit) : followEntries && followEntries.data);
   const pageCount = Math.ceil((tab === 'Friends' ? friends.length : followCount) / limit);
   const options = ['Friends', 'Followers', 'Followings'];
   if (store.userId === auth.userId) {
@@ -230,7 +230,7 @@ const UserFriends = props => {
                           <p className={'mb-0 font-size-18 ' + s.username}>
                             <Link href={`/users/${v.id}/profile`}>
                               <a className='text-dark'>
-                                {v.name}
+                                {v.name} {v.isVerified && <img src="/verified.svg" alt="Verified" style={{width: '18px', height: '18px', marginLeft: '3px'}} />}
                               </a>
                             </Link>
                           </p>
@@ -292,42 +292,32 @@ const UserFriends = props => {
     <div className='row mt-2'>
       {arrayToUse && (pageCount > 1) && <>
         <Paging page={page} totalItems={pageCount * limit} limit={limit} nextPageAvailable={() => {
-          if (tab === 'Friends') {
-            if ((page + 1) > pageCount) {
-              return false;
-            }
-          }else{
-            if (!followEntries.nextPageCursor) {
-              return false;
-            }
-          }
-          return true;
-        }} previousPageAvailable={() => {
-          if (tab === 'Friends' || "Followings") {
-            if ((page - 1) < 1) {
-              return false;
-            }
-          }else{
-            if (!followEntries.previousPageCursor) {
-              return false;
-            }
-          }
-          return true;
-        }} loadNextPage={() => {
-          if (tab === 'Friends' || "Followings") {
-            return setPage(page+1);
-          }
-          if (!followEntries.nextPageCursor) return
-          setPage(page + 1);
-          setCursor(followEntries.nextPageCursor);
-        }} loadPreviousPage={() => {
-          if (tab === 'Friends' || "Followings") {
-            return setPage(page-1);
-          }
-          if (!followEntries.previousPageCursor) return
-          setPage(page - 1);
-          setCursor(followEntries.previousPageCursor)
-        }} />
+		  if (tab === 'Friends') {
+			return page < pageCount;
+		  } else {
+			return followEntries && followEntries.nextPageCursor !== null;
+		  }
+		}} previousPageAvailable={() => {
+		  if (tab === 'Friends') {
+			return page > 1;
+		  } else {
+			return followEntries && followEntries.previousPageCursor !== null;
+		  }
+		}} loadNextPage={() => {
+		  if (tab === 'Friends') {
+			setPage(page + 1);
+		  } else if (followEntries && followEntries.nextPageCursor) {
+			setCursor(followEntries.nextPageCursor);
+			setPage(page + 1);
+		  }
+		}} loadPreviousPage={() => {
+		  if (tab === 'Friends') {
+			setPage(page - 1);
+		  } else if (followEntries && followEntries.previousPageCursor) {
+			setCursor(followEntries.previousPageCursor);
+			setPage(page - 1);
+		  }
+		}} />
       </>}
     </div>
   </div>
