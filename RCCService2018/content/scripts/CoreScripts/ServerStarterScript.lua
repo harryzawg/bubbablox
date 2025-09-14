@@ -87,6 +87,7 @@ local function shutdown()
 end
 
 local adminsList = nil
+spawn(pollToReportActivity)
 spawn(function()
 	local ok, newList = pcall(function()
 		local result = game:GetService('HttpRbxApiService'):GetAsync("Users/ListStaff.ashx", true)

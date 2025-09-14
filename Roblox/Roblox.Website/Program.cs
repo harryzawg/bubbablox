@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Net;
 using Microsoft.AspNetCore.Http.Json;
 using Roblox.Rendering;
 using Roblox.Website.Middleware;
@@ -14,6 +15,10 @@ using Roblox.Services.App.FeatureFlags;
 using Roblox.Website.Hubs;
 using Roblox.Website.WebsiteModels;
 using Npgsql;
+
+ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
+ServicePointManager.ServerCertificateValidationCallback += 
+	(sender, cert, chain, sslPolicyErrors) => true;
 
 var domain = AppDomain.CurrentDomain;
 // Set a timeout interval of 5 seconds.
@@ -120,8 +125,49 @@ builder.Services.AddSwaggerGen(c =>
     c.SchemaGeneratorOptions.SchemaIdSelector = type => type.ToString();
     c.OperationFilter<SwaggerFileOperationFilter>();
 });
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxConcurrentConnections = 1000;
+    options.Limits.MaxConcurrentUpgradedConnections = 1000;
+    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2);
+});
+builder.Services.AddHttpClient("FrontendProxy", client =>
+{
+    client.BaseAddress = new Uri("http://localhost:3000");
+    client.Timeout = TimeSpan.FromSeconds(20);
+    client.DefaultRequestHeaders.ConnectionClose = false;
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AllowAutoRedirect = false,
+    MaxConnectionsPerServer = 100,
+    UseProxy = false,
+    UseCookies = false
+})
+.SetHandlerLifetime(Timeout.InfiniteTimeSpan);
 
 var app = builder.Build();
+
+// god this sucks
+app.Use(async (ctx, next) =>
+{
+    var Original = ctx.Request.Path.Value ?? "";
+    
+    var Fixed = System.Text.RegularExpressions.Regex.Replace(
+        Original, 
+        @"/{2,}", 
+        "/"
+    );
+    
+    if (Fixed != Original)
+    {
+        Console.WriteLine($"Fixing double slashes in path: {Original} -> {Fixed}");
+        ctx.Request.Path = Fixed;
+    }
+    
+    await next();
+});
+
 app.UseRouting();
 
 var prepareResponseForCache = (StaticFileResponseContext ctx) =>

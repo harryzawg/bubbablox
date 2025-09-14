@@ -105,6 +105,15 @@ namespace Roblox.Website.Controllers
 			}
 		}
 		
+		[HttpGetBypass("Setting/24")]
+		public async Task<MVC.ActionResult> GetAppSettings2014()
+		{
+			string json = "2014LFFlags";
+			json = System.IO.Path.Combine(Configuration.JsonDataDirectory, "2014LFFlags.json");
+			string content = await System.IO.File.ReadAllTextAsync(json);
+			return Content(content, "text/plain");
+		}
+		
 		[HttpGetBypass("/v1/settings/application")]
 		public async Task<MVC.IActionResult> RCCNewApplication(string applicationName)
 		{
@@ -117,6 +126,7 @@ namespace Roblox.Website.Controllers
 						json = System.IO.Path.Combine(Configuration.JsonDataDirectory, "PCDesktopClient.json");
 						break;
 
+					// Make this configurable in appsettyings
 					case "RCCServiceBubbleRev2021RCCIsSoTuff":
 						json = System.IO.Path.Combine(Configuration.JsonDataDirectory, "RCCService.json");
 						break;

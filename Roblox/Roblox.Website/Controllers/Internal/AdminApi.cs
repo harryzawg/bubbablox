@@ -523,7 +523,7 @@ public class AdminApiController : ControllerBase
             throw new StaffException("Item is not pending: " + isPending.moderationStatus);
         var version = await services.assets.GetLatestAssetVersion(assetId);
         if (version.contentUrl != null)
-            return await services.assets.GetAssetContent(version.contentUrl);
+            return await services.assets.GetAudioContentAsWav(assetId, version.contentUrl);
         
         throw new StaffException("Unsupported action");
     }
@@ -2593,8 +2593,8 @@ Thank you for your understanding,
 			"INNER JOIN \"user\" u on u.id = ua.user_id " +
 			"INNER JOIN \"asset\" a ON a.id = ua.asset_id " +
 			"WHERE ua.user_id = 12 AND (a.is_limited OR a.is_limited_unique) AND NOT a.is_for_sale " +
-			"AND u.status = :status " +  // Added status check
-			"ORDER BY a.id LIMIT 1000",  // Changed ordering to asset ID
+			"AND u.status = :status " +
+			"ORDER BY a.id LIMIT 1000",
 			new
 			{
 				status = AccountStatus.Ok
@@ -2618,7 +2618,7 @@ Thank you for your understanding,
 				
 			foreach (var item in dbgitems)
 			{
-				log.Info($"Debug item: {item.name} (AssetID: {item.asset_id}, UAID: {item.user_asset_id}, Limited: {item.is_limited}, LimitedUnique: {item.is_limited_unique}, ForSale: {item.is_for_sale})");
+				//log.Info($"dabh {item.name} (AssetID: {item.asset_id}, UAID: {item.user_asset_id}, Limited: {item.is_limited}, LimitedUnique: {item.is_limited_unique}, ForSale: {item.is_for_sale})");
 			}
 		}
 
@@ -3945,6 +3945,7 @@ Thank you for your understanding,
         await services.users.SetUserDescription(userId, "[ Content Deleted ]");
     }
 	
+	// make it generate a random password
 	[HttpPost("users/{userId:long}/reset-password"), StaffFilter(Access.ResetUsername | Access.ResetDescription)]
 	public async Task ResetPassword(long userId)
 	{

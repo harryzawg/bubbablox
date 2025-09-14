@@ -15,10 +15,13 @@ public class FrontendProxyMiddleware
 {
     private RequestDelegate _next;
 
-    public FrontendProxyMiddleware(RequestDelegate next)
-    {
-        _next = next;
-    }
+	private readonly IHttpClientFactory _httpClientFactory;
+
+	public FrontendProxyMiddleware(RequestDelegate next, IHttpClientFactory httpClientFactory)
+	{
+		_next = next;
+		_httpClientFactory = httpClientFactory;
+	}
 
     public static List<string> BypassUrls = new()
     {
@@ -97,28 +100,11 @@ public class FrontendProxyMiddleware
         "/chat/negotiate",
     };
 
-	private static HttpClient _httpClient { get; set; } = new(new HttpClientHandler()
+	private async Task<HttpResponseMessage> ProxyRequestAsync(string url)
 	{
-		AllowAutoRedirect = false,
-		MaxConnectionsPerServer = 100
-	})
-	{
-		Timeout = TimeSpan.FromSeconds(30)
-	};
-
-    private async Task<HttpResponseMessage> ProxyRequestAsync(string url)
-    {
-        var fullUrl = "http://localhost:3000" + url;
-        // Console.WriteLine("[PROXY] {0}", fullUrl);
-        var safeUrl = new Uri(fullUrl);
-        if (safeUrl.Port != 3000)
-            throw new ArgumentException("Unsafe Url: " + fullUrl);
-        if (safeUrl.Host != "localhost")
-            throw new ArgumentException("Unsafe Url: " + fullUrl);
-        
-        var result = await _httpClient.GetAsync(safeUrl);
-        return result;
-    }
+		var client = _httpClientFactory.CreateClient("FrontendProxy");
+		return await client.GetAsync(url);
+	}
 
     public async Task HandleProxyResult(string url, string? contentType, int statusCode, string? locationHeader, HttpContext ctx)
     {
@@ -171,60 +157,118 @@ public class FrontendProxyMiddleware
 
         return null;
     }
+	
+	private string FixDoubleSlashes(string url)
+	{
+		return System.Text.RegularExpressions.Regex.Replace(
+			url, 
+			@"(?<!http:|https:)/{2,}", 
+			"/"
+		);
+	}
+	
+	public async Task InvokeAsync(HttpContext ctx)
+	{
+		var requestUrl = ctx.Request.GetEncodedPathAndQuery();
+		
+		var fixedUrl = FixDoubleSlashes(requestUrl);
+		if (fixedUrl != requestUrl)
+		{
+			var uri = new Uri(fixedUrl, UriKind.RelativeOrAbsolute);
+			ctx.Request.Path = uri.IsAbsoluteUri ? uri.AbsolutePath : uri.OriginalString;
 
-    public async Task InvokeAsync(HttpContext ctx)
-    {
-        var requestUrl = ctx.Request.GetEncodedPathAndQuery();
-        foreach (var item in BypassUrls)
-        {
-            if (requestUrl.ToLower().StartsWith(item))
-            {
-                await _next(ctx);
-                return;
-            }
-        }
-#if RELEASE
-        var cached = GetPageFromCache(requestUrl);
-        if (cached != null)
-        {
-            ctx.Response.Headers.Add("x-cache-dbg", "f-2016; memv1;");
-            await HandleProxyResult(requestUrl, cached.Item1, cached.Item4, cached.Item3, ctx);
-            await ctx.Response.WriteAsync(cached.Item2);
-            return;
-        }
-#endif
-        var result = await ProxyRequestAsync(requestUrl);
-        var str = await result.Content.ReadAsStreamAsync();
-        // First, copy to memory
-        var mem = new MemoryStream();
-        await str.CopyToAsync(mem);
-        mem.Position = 0;
-        // Make a string
-        var cacheStr = await new StreamReader(mem).ReadToEndAsync();
-        mem.Position = 0;
-        var contentType = result.Content.Headers.ContentType?.ToString();
-        var locationHeader = result.Headers.Location?.ToString();
-        var cacheable = contentType != null && result.IsSuccessStatusCode && (
-                contentType.Contains("application/javascript") ||
-                contentType.Contains("text/html"));
-        if (requestUrl.ToLower().StartsWith("/forum/"))
-            cacheable = false;
+			if (uri.IsAbsoluteUri && !string.IsNullOrEmpty(uri.Query))
+			{
+				ctx.Request.QueryString = new QueryString(uri.Query);
+			}
 
-        if (cacheable)
-        {
-            pageCacheMux.WaitOne();
-            if (pageCache.Count < 1000)
-            {
-                pageCache[requestUrl] = new(contentType, cacheStr, locationHeader, 200);
-            }
-            else
-            {
-                Writer.Info(LogGroup.PerformanceDebugging, "2016 frontend page cache is full, not saving {0}", requestUrl);
-            }
-            pageCacheMux.ReleaseMutex();
-        }
-        await HandleProxyResult(requestUrl, contentType, (int)result.StatusCode, locationHeader, ctx);
-        await mem.CopyToAsync(ctx.Response.BodyWriter.AsStream());
+			requestUrl = fixedUrl;
+		}
 
-    }
+		foreach (var item in BypassUrls)
+		{
+			if (requestUrl.ToLower().StartsWith(item))
+			{
+				await _next(ctx);
+				return;
+			}
+		}
+
+	#if RELEASE
+		var cached = GetPageFromCache(requestUrl);
+		if (cached != null)
+		{
+			ctx.Response.Headers.Add("x-cache-dbg", "f-2016; memv1;");
+			await HandleProxyResult(requestUrl, cached.Item1, cached.Item4, cached.Item3, ctx);
+			await ctx.Response.WriteAsync(cached.Item2);
+			return;
+		}
+	#endif
+
+		using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+		
+		try
+		{
+			var client = _httpClientFactory.CreateClient("FrontendProxy");
+			var result = await client.GetAsync(requestUrl, cts.Token);
+
+			var contentType = result.Content.Headers.ContentType?.ToString();
+			var locationHeader = result.Headers.Location?.ToString();
+			var statusCode = (int)result.StatusCode;
+
+			var cacheable = contentType != null && result.IsSuccessStatusCode && (
+				contentType.Contains("application/javascript") ||
+				contentType.Contains("text/html"));
+				
+			if (requestUrl.ToLower().StartsWith("/forum/"))
+				cacheable = false;
+
+	#if RELEASE
+			if (cacheable)
+			{
+				var contentString = await result.Content.ReadAsStringAsync(cts.Token);
+				
+				pageCacheMux.WaitOne();
+				if (pageCache.Count < 1000)
+				{
+					pageCache[requestUrl] = new(contentType, contentString, locationHeader, statusCode);
+				}
+				else
+				{
+					Writer.Info(LogGroup.PerformanceDebugging, "2016 frontend page cache is full, not saving {0}", requestUrl);
+				}
+				pageCacheMux.ReleaseMutex();
+				
+				await HandleProxyResult(requestUrl, contentType, statusCode, locationHeader, ctx);
+				await ctx.Response.WriteAsync(contentString);
+			}
+			else
+			{
+				await HandleProxyResult(requestUrl, contentType, statusCode, locationHeader, ctx);
+				await result.Content.CopyToAsync(ctx.Response.Body, cts.Token);
+			}
+	#else
+			await HandleProxyResult(requestUrl, contentType, statusCode, locationHeader, ctx);
+			await result.Content.CopyToAsync(ctx.Response.Body, cts.Token);
+	#endif
+		}
+		catch (TaskCanceledException)
+		{
+			Console.WriteLine($"timeout for: {requestUrl}");
+			ctx.Response.StatusCode = 504;
+			await ctx.Response.WriteAsync("Timeout");
+		}
+		catch (HttpRequestException ex)
+		{
+			Console.WriteLine($"HTTP error for {requestUrl}: {ex.Message}");
+			ctx.Response.StatusCode = 502;
+			await ctx.Response.WriteAsync("Bad gateway");
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"error for {requestUrl}: {ex.Message}");
+			ctx.Response.StatusCode = 500;
+			await ctx.Response.WriteAsync("Internal Server Error");
+		}
+	}
 }
