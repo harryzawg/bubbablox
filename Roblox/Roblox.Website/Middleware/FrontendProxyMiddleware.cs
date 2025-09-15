@@ -167,6 +167,7 @@ public class FrontendProxyMiddleware
 		);
 	}
 	
+	// BOOOOO stupid fucking proxy. i hate it why does it break the whole ufkcing site?
 	public async Task InvokeAsync(HttpContext ctx)
 	{
 		var requestUrl = ctx.Request.GetEncodedPathAndQuery();

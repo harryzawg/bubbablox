@@ -37,7 +37,7 @@ public class WebController : ControllerBase
         // Init server close tasks
         Task.Run(async () =>
         {
-/*             while (true)
+            while (true)
             {
                 try
                 {
@@ -48,7 +48,7 @@ public class WebController : ControllerBase
                     Console.WriteLine("[info] KillOldservers task failed: {0}\n{1}",e.Message,e.StackTrace);
                 }
                 await Task.Delay(TimeSpan.FromSeconds(30));
-            } */
+            }
         });
     }
 	

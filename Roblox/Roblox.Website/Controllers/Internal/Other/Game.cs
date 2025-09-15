@@ -494,115 +494,6 @@ namespace Roblox.Website.Controllers
 			}
 		}
 		
-		/* 		// MAKE THE JOIN SCRIPTS NOT RUN OFF OF A WEBSERVER IN THE FUTURE
-		// this is for the PHP place launcher so it gets the correct data
-		[HttpGetBypass("game/get-data")]
-		public async Task<dynamic> GetGameData([Required] long placeId, string? ticket = null)
-		{
-			try
-			{
-				long userId;
-				
-				if (!string.IsNullOrEmpty(ticket))
-				{
-					try 
-					{
-						// Please rewrite this part, this was when I barely knew the codebase
-						var ticketData = services.gameServer.DecodeTicket(ticket, null);
-						userId = ticketData.userId;
-						
-						if (userId <= 0)
-						{
-							throw new RobloxException(401, 0, "Invalid user ID");
-						}
-
-						var ticketUserInfo = await services.users.GetUserById(userId);
-						if (ticketUserInfo == null)
-						{
-							throw new RobloxException(404, 0, "User not found");
-						}
-					}
-					catch (Exception decodeEx)
-					{
-						Console.WriteLine($"bad ticket: {decodeEx.Message}");
-						throw new RobloxException(401, 0, "Invalid ticket");
-					}
-				}
-				else if (userSession != null)
-				{
-					userId = userSession.userId;
-				}
-				else
-				{
-					throw new RobloxException(401, 0, "Not authenticated");
-				}
-
-				var userInfo = await services.users.GetUserById(userId);
-				if (userInfo == null)
-				{
-					throw new RobloxException(404, 0, "User not found");
-				}
-
-				int accountAgeDays = (int)(DateTime.UtcNow - userInfo.created).TotalDays;
-
-				var membership = await services.users.GetUserMembership(userId);
-				string membershipType = membership?.membershipType switch
-				{
-					MembershipType.OutrageousBuildersClub => "OutrageousBuildersClub",
-					MembershipType.TurboBuildersClub => "TurboBuildersClub",
-					MembershipType.BuildersClub => "BuildersClub",
-					_ => "None"
-				};
-
-				var placeDetails = await services.assets.GetAssetCatalogInfo(placeId);
-				if (placeDetails == null || placeDetails.assetType != Roblox.Models.Assets.Type.Place)
-				{
-					throw new RobloxException(404, 0, "Place not found");
-				}
-				
-				long universeId = await services.games.GetUniverseId(placeId);
-
-				string creatorName;
-				if (placeDetails.creatorType == CreatorType.User)
-				{
-					var creatorUser = await services.users.GetUserById(placeDetails.creatorTargetId);
-					creatorName = creatorUser?.username ?? "Unknown";
-				}
-				else
-				{
-					creatorName = placeDetails.creatorName ?? "Unknown";
-				}
-
-				return new
-				{
-					success = true,
-					user = new
-					{
-						userId = userId,
-						username = userInfo.username,
-						accountAgeDays = accountAgeDays,
-						membershipType = membershipType
-					},
-					place = new
-					{
-						placeId = placeId,
-						creatorId = placeDetails.creatorTargetId,
-						creatorType = placeDetails.creatorType.ToString(),
-						creatorName = creatorName,
-						universeId = universeId
-					}
-				};
-			}
-			catch (Exception ex)
-			{
-				return new
-				{
-					success = false,
-					error = ex.Message
-				};
-			}
-		} */
-		
 		[HttpGetBypass("/game/host2014")]
 		public async Task<MVC.IActionResult> Host2014()
 		{
@@ -1064,5 +955,114 @@ pcall(function() game:SetScreenshotInfo("""") end)";
 				return StatusCode(500, "Failed to generate game script");
 			}
 		}
+		
+		/* 		// MAKE THE JOIN SCRIPTS NOT RUN OFF OF A WEBSERVER IN THE FUTURE
+		// this is for the PHP place launcher so it gets the correct data
+		[HttpGetBypass("game/get-data")]
+		public async Task<dynamic> GetGameData([Required] long placeId, string? ticket = null)
+		{
+			try
+			{
+				long userId;
+				
+				if (!string.IsNullOrEmpty(ticket))
+				{
+					try 
+					{
+						// Please rewrite this part, this was when I barely knew the codebase
+						var ticketData = services.gameServer.DecodeTicket(ticket, null);
+						userId = ticketData.userId;
+						
+						if (userId <= 0)
+						{
+							throw new RobloxException(401, 0, "Invalid user ID");
+						}
+
+						var ticketUserInfo = await services.users.GetUserById(userId);
+						if (ticketUserInfo == null)
+						{
+							throw new RobloxException(404, 0, "User not found");
+						}
+					}
+					catch (Exception decodeEx)
+					{
+						Console.WriteLine($"bad ticket: {decodeEx.Message}");
+						throw new RobloxException(401, 0, "Invalid ticket");
+					}
+				}
+				else if (userSession != null)
+				{
+					userId = userSession.userId;
+				}
+				else
+				{
+					throw new RobloxException(401, 0, "Not authenticated");
+				}
+
+				var userInfo = await services.users.GetUserById(userId);
+				if (userInfo == null)
+				{
+					throw new RobloxException(404, 0, "User not found");
+				}
+
+				int accountAgeDays = (int)(DateTime.UtcNow - userInfo.created).TotalDays;
+
+				var membership = await services.users.GetUserMembership(userId);
+				string membershipType = membership?.membershipType switch
+				{
+					MembershipType.OutrageousBuildersClub => "OutrageousBuildersClub",
+					MembershipType.TurboBuildersClub => "TurboBuildersClub",
+					MembershipType.BuildersClub => "BuildersClub",
+					_ => "None"
+				};
+
+				var placeDetails = await services.assets.GetAssetCatalogInfo(placeId);
+				if (placeDetails == null || placeDetails.assetType != Roblox.Models.Assets.Type.Place)
+				{
+					throw new RobloxException(404, 0, "Place not found");
+				}
+				
+				long universeId = await services.games.GetUniverseId(placeId);
+
+				string creatorName;
+				if (placeDetails.creatorType == CreatorType.User)
+				{
+					var creatorUser = await services.users.GetUserById(placeDetails.creatorTargetId);
+					creatorName = creatorUser?.username ?? "Unknown";
+				}
+				else
+				{
+					creatorName = placeDetails.creatorName ?? "Unknown";
+				}
+
+				return new
+				{
+					success = true,
+					user = new
+					{
+						userId = userId,
+						username = userInfo.username,
+						accountAgeDays = accountAgeDays,
+						membershipType = membershipType
+					},
+					place = new
+					{
+						placeId = placeId,
+						creatorId = placeDetails.creatorTargetId,
+						creatorType = placeDetails.creatorType.ToString(),
+						creatorName = creatorName,
+						universeId = universeId
+					}
+				};
+			}
+			catch (Exception ex)
+			{
+				return new
+				{
+					success = false,
+					error = ex.Message
+				};
+			}
+		} */
 	}
 }	

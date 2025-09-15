@@ -448,10 +448,10 @@ public class GameServerService : ServiceBase
 		
 		if (AvailableServer != null)
 		{
-/* 			if (!currentGameServerPorts.ContainsKey(AvailableServer.id))
+			if (!currentGameServerPorts.ContainsKey(AvailableServer.id))
 			{
 				currentGameServerPorts[AvailableServer.id] = AvailableServer.port;
-			} */
+			}
 			
 			return new GameServerGetOrCreateResponse()
 			{
@@ -478,8 +478,8 @@ public class GameServerService : ServiceBase
 		var RandomNSPort = Configuration.AllowedNetworkPorts.OrderBy(x => Guid.NewGuid());
 		foreach (var port in RandomNSPort)
 		{
-			//if (IsPortAvailable(port) && !currentGameServerPorts.Values.Contains(port))
-			if (IsPortAvailableTCP(port))
+			if (IsPortAvailable(port) && !currentGameServerPorts.Values.Contains(port))
+			//if (IsPortAvailableTCP(port))
 			{
 				NSPort = port;
 				break;
@@ -494,8 +494,8 @@ public class GameServerService : ServiceBase
 		for (int i = 0; i < 10; i++)
 		{
 			int RCCRandomPort = random.Next(50000, 60001);
-			//if (IsPortAvailable(RCCRandomPort) && !mainRCCPortsInUse.Values.Contains(RCCRandomPort))
-			if (IsPortAvailableTCP(RCCRandomPort) && !mainRCCPortsInUse.Values.Contains(RCCRandomPort))
+			if (IsPortAvailable(RCCRandomPort) && !mainRCCPortsInUse.Values.Contains(RCCRandomPort))
+			//if (IsPortAvailableTCP(RCCRandomPort) && !mainRCCPortsInUse.Values.Contains(RCCRandomPort))
 			{
 				RCCPort = RCCRandomPort;
 				break;
@@ -519,7 +519,7 @@ public class GameServerService : ServiceBase
 
 		if (Start != "BAD")
 		{
-			//currentGameServerPorts[jobId] = NSPort;
+			currentGameServerPorts[jobId] = NSPort;
 			return new GameServerGetOrCreateResponse()
 			{
 				job = jobId,

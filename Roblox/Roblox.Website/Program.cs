@@ -161,7 +161,7 @@ app.Use(async (ctx, next) =>
     
     if (Fixed != Original)
     {
-        Console.WriteLine($"Fixing double slashes in path: {Original} -> {Fixed}");
+        //Console.WriteLine($"fixing double slashes in path: {Original} -> {Fixed}");
         ctx.Request.Path = Fixed;
     }
     
