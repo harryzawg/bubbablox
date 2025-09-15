@@ -32,7 +32,7 @@ namespace Roblox.Website.Controllers
     public class Assets : ControllerBase 
     {		
 	    [HttpGet("asset/shader")]
-        public async Task<MVC.FileResult> GetShaderAsset(long id)
+        public async Task<MVC.ActionResult> GetShaderAsset(long id)
         {
             var isMaterialOrShader = BypassControllerMetadata.materialAndShaderAssetIds.Contains(id);
             if (!isMaterialOrShader)
@@ -74,7 +74,7 @@ namespace Roblox.Website.Controllers
                 MaxAge = TimeSpan.FromDays(360),
             }.ToString();
             var assetContent = await services.assets.GetAssetContent(latestVersion.contentUrl);
-            return File(assetContent, "application/binary");
+            return base.File(assetContent, "application/binary");
         }
 
         private bool IsRcc()
@@ -121,6 +121,13 @@ namespace Roblox.Website.Controllers
         [HttpPostBypass("asset")]
 		public async Task<MVC.ActionResult> GetAssetById(long id, [MVC.FromQuery] string? apiKey = null, [MVC.FromQuery(Name = "assetversionid")] long? assetVersionId = null)
         {
+			var CachedRobloxAsset = await GetCachedAsset(id);
+			if (CachedRobloxAsset != null)
+			{
+				Console.WriteLine($"[cache] returning cached asset {id} from cache");
+				return CachedRobloxAsset;
+			}
+			
 			if (assetVersionId.HasValue)
 			{
 				id = assetVersionId.Value;
@@ -133,7 +140,7 @@ namespace Roblox.Website.Controllers
 					throw new RobloxException(400, 0, "Content URL is null");
 
 				var assetContentSecret = await services.assets.GetAssetContent(latestVersionSecret.contentUrl);
-				return File(assetContentSecret, "application/binary");
+				return base.File(assetContentSecret, "application/binary");
 			}
 			
             // TODO: This endpoint needs to be updated to return a URL to the asset, not the asset itself.
@@ -216,8 +223,9 @@ namespace Roblox.Website.Controllers
 								}
 
 								Response.Headers["Content-Type"] = contentType;
-
-								return File(content, contentType);
+								
+								await CacheAsset(assetId, content, contentType);
+								return base.File(content, contentType);
 							}
 							else
 							{
@@ -398,13 +406,73 @@ namespace Roblox.Website.Controllers
 
             if (assetContent != null)
             {
-                return File(assetContent, "application/binary");
+                return base.File(assetContent, "application/binary");
             }
 
             Console.WriteLine("[info] got BadRequest on /asset/ endpoint");
             throw new BadRequestException();
         }
 		
+		private async Task CacheAsset(long assetId, byte[] content, string contentType)
+		{
+			try
+			{
+				var CacheDIR = Path.Combine(Directory.GetCurrentDirectory(), "AssetCache");
+				if (!Directory.Exists(CacheDIR))
+				{
+					Directory.CreateDirectory(CacheDIR);
+				}
+				
+				var Cache = Path.Combine(CacheDIR, $"{assetId}.cache");
+				var Meta = Path.Combine(CacheDIR, $"{assetId}.meta");
+				
+				await System.IO.File.WriteAllBytesAsync(Cache, content);
+				
+				var MetaData = new
+				{
+					ContentType = contentType,
+					CachedAt = DateTime.UtcNow,
+					AssetId = assetId
+				};
+				await System.IO.File.WriteAllTextAsync(Meta, System.Text.Json.JsonSerializer.Serialize(MetaData));
+				
+				Console.WriteLine($"[cache] cached asset {assetId}");
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"[cache] failed to cache asset {assetId}: {ex.Message}");
+			}
+		}
+		
+		private async Task<MVC.FileContentResult?> GetCachedAsset(long assetId)
+		{
+			try
+			{
+				var CacheDIR = Path.Combine(Directory.GetCurrentDirectory(), "AssetCache");
+				var Cache = Path.Combine(CacheDIR, $"{assetId}.cache");
+				var Meta = Path.Combine(CacheDIR, $"{assetId}.meta");
+				
+				if (System.IO.File.Exists(Cache) && System.IO.File.Exists(Meta))
+				{
+					var MetaJSON = await System.IO.File.ReadAllTextAsync(Meta);
+					var MetaData = System.Text.Json.JsonSerializer.Deserialize<JsonElement>(MetaJSON);
+					string contentType = MetaData.TryGetProperty("ContentType", out var ct)
+						? ct.GetString() ?? "application/octet-stream"
+						: "application/octet-stream";
+
+					var content = await System.IO.File.ReadAllBytesAsync(Cache);
+					
+					return new MVC.FileContentResult(content, contentType);
+				}
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"[cache] error getting cached asset {assetId}: {ex.Message}");
+			}
+			
+			return null;
+		}
+				
 		public class BatchAssetRequest
 		{
 			public long assetId { get; set; }

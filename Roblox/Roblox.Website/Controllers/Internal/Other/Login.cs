@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
@@ -23,6 +24,7 @@ using Roblox.Services.Exceptions;
 using Roblox.Website.WebsiteModels.Discord;
 using Npgsql;
 using Dapper;
+using Roblox.Dto.Users;
 
 // Everything login/signup here
 namespace Roblox.Website.Controllers 

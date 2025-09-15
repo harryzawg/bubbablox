@@ -1243,9 +1243,10 @@ public class GameServerService : ServiceBase
         {
             t = DateTime.UtcNow.Subtract(TimeSpan.FromMinutes(2)),
         })).ToList();
-        //Console.WriteLine("[info] there are {0} bad servers", serversToDelete.Count);
+        Console.WriteLine("[info] there are {0} bad servers", serversToDelete.Count);
         foreach (var server in serversToDelete)
         {
+			ShutDownServer(server.id);
             var players = await GetGameServerPlayers(server.id);
             foreach (var player in players)
             {

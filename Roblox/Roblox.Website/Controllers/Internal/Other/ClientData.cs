@@ -125,6 +125,10 @@ namespace Roblox.Website.Controllers
 					case "PCDesktopClient":
 						json = System.IO.Path.Combine(Configuration.JsonDataDirectory, "PCDesktopClient.json");
 						break;
+						
+					case "StudioApp":
+						json = System.IO.Path.Combine(Configuration.JsonDataDirectory, "StudioApp.json");
+						break;
 
 					// Make this configurable in appsettyings
 					case "RCCServiceBubbleRev2021RCCIsSoTuff":
