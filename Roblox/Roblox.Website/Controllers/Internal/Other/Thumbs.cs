@@ -170,14 +170,50 @@ namespace Roblox.Website.Controllers
             }
             return await GetThumbnailUrl(userId, ThumbnailType.UserAvatar);
         }
+		
+		[HttpGet("thumbs/avatar.ashx")]
+		public async Task<RedirectResult> GetAvatarThumbnail(long userId)
+		{
+			var authUser18Plus = userSession != null && await services.users.Is18Plus(userSession.userId);
+			if (!authUser18Plus)
+			{
+				var avatar18Plus = await services.avatar.IsUserAvatar18Plus(userId);
+				if (avatar18Plus)
+					return new RedirectResult("/img/blocked.png", false);
+			}
+
+			var result = (await services.thumbnails.GetUserThumbnails(new[] {userId})).ToList();
+			
+			if (result.Count == 0)
+				return new RedirectResult("/img/placeholder.png", false);
+			
+			var safeUrl = result[0].imageUrl ?? "/img/placeholder.png";
+			return new RedirectResult(safeUrl, false);
+		}
 
         //headshot stuff
         [HttpGetBypass("headshot-thumbnail/image")]
-        [HttpGetBypass("thumbs/avatar-headshot.ashx")]
         public async Task<MVC.RedirectResult> GetAvatarHeadShot(long userId)
         {
             return await GetThumbnailUrl(userId, ThumbnailType.UserHeadshot);
         }
+		
+		[HttpGet("thumbs/avatar-headshot.ashx")]
+		public async Task<RedirectResult> GetAvatarHeadShotAshx(long userId)
+		{
+			var authUser18Plus = userSession != null && await services.users.Is18Plus(userSession.userId);
+			if (!authUser18Plus)
+			{
+				var avatar18Plus = await services.avatar.IsUserAvatar18Plus(userId);
+				if (avatar18Plus)
+					return new RedirectResult("/img/blocked.png", false);
+			}
+
+			var result = (await services.thumbnails.GetUserHeadshots(new[] {userId})).ToList();
+			if (result.Count == 0)
+				return new RedirectResult("/img/placeholder.png", false);
+			return new RedirectResult(result[0].imageUrl ?? "/img/placeholder.png", false);
+		}
 
         //place icon
         [HttpGetBypass("Thumbs/PlaceIcon.ashx")]
@@ -196,6 +232,25 @@ namespace Roblox.Website.Controllers
                 assetId = (long)aid;
             return await GetThumbnailUrl(assetId, ThumbnailType.Asset);
         }
+		
+		[HttpGet("icons/asset.ashx")]
+		public async Task<RedirectResult> GetAssetIcon([Required] long assetId)
+		{
+			var authUser18Plus = userSession != null && await services.users.Is18Plus(userSession.userId);
+			if (!authUser18Plus)
+			{
+				var asset18Plus = await services.assets.Is18Plus(assetId);
+				if (asset18Plus)
+					return new RedirectResult("/img/blocked.png", false);
+			}
+			
+			var universe = (await services.games.MultiGetPlaceDetails(new[] {assetId})).First();
+			var result = (await services.thumbnails.GetGameIcons(new[] {universe.universeId})).ToList();
+
+			if (result.Count == 0 || result[0].imageUrl == null)
+				return new RedirectResult("/img/placeholder.png", false);
+			return new RedirectResult(result[0].imageUrl ?? "/img/placeholder.png", false);
+		}
 
         //all json thumbnail apis
         [HttpGetBypass("avatar-thumbnail/json")]

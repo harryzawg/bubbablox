@@ -234,10 +234,16 @@ public class SessionMiddleware
                         try
                         {
                             var sessResult = await users.GetSessionById(DecodedRes.sessionId);
-                            userInfo = await users.GetUserById(sessResult.userId);
-                                                    
+                            userInfo = await users.GetUserById(sessResult.userId);                         
 							var IP = ControllerBase.GetRequesterIpRaw(ctx);
 							var hashed = await GetHashedIP(IP);
+							
+							if (await users.IsUserPoisoned(hashed))
+							{
+								ctx.Response.StatusCode = 403;
+								authTimer.Stop();
+								return;
+							}
 
 							var cache = IPCache.TryGetValue(IP, out var entry) ? entry : null;
 							var blockstats = cache?.blockstats ?? 0;

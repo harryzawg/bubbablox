@@ -91,6 +91,7 @@
 				<div class="col-12 col-lg-3">
 					<select class="form-control" bind:value={expires}>
 						<option value="permanent">Permanent</option>
+						<option value="poison">Poison (IP)</option>
 						<option value="1,seconds">Warning</option>
 						<option value="1,days">1 Day</option>
 						<option value="3,days">3 Day</option>
@@ -123,7 +124,11 @@
 					let reason = document.getElementById('deletion-reason').value;
 					let expiresUtc = Date.now();
 					let expiresStr = '';
-					if (expires !== 'permanent') {
+					let isPoisoned = expires === 'poison';
+					
+					if (isPoisoned) {
+						expiresStr = "Poisoned(IP)";
+					} else if (expires !== 'permanent') {
 						let [val, period] = expires.split(',');
 						let periodToMsec = period === 'seconds' ? 1000 : period === 'hours' ? (1000 * 60 * 60) : period === 'days' ? (86400 * 1000) : 0;
 						expiresUtc += parseInt(val, 10) * periodToMsec;

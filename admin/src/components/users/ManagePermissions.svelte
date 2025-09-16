@@ -311,8 +311,6 @@
 						'GetGroupWall',
 						'DeleteGroupWallPost',
 						'ManageReports',
-						'CreateAsset',
-						'CreateAssetVersion',
 						'RequestAssetReRender',
 						'GetAllAssetOwners',
 						'ResetAvatar',
@@ -321,7 +319,6 @@
 						'GetUserModerationHistory',
 						'GetAlert',
 						'SetAlert',
-						'CreateUser',
 						'GetPendingGroupIcons',
 						'GetPendingModerationGameIcons',
 						'SetGameIconModerationStatus',
@@ -335,7 +332,6 @@
 						'GetDetailsFromThumbnail',
 						'GetGameServers',
 						'RefundAndDeleteFirstPartyAssetSale',
-						'SetAssetProduct',
 						'GetGroupStatus',
 						'DeleteGroupStatus',
 						'GetAllUserStatuses',
@@ -344,14 +340,5 @@
 					];
 					quickConfig(permissions);
 				}}>Moderator</button>
-
-				<button class="btn btn-primary mt-4 ml-2" on:click={() => {
-					const permissions = [
-						'CreateAssetCopiedFromRoblox',
-						'GetProductDetails',
-						'SetAssetProduct'
-					];
-					quickConfig(permissions);
-				}}>Asset Copy (Non-Limited items)</button>
 			</div>
 </div>

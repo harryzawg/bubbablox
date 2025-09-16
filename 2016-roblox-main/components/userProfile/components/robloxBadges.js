@@ -58,11 +58,19 @@ const RobloxBadges = props => {
         <div className='row'>
           {
             badges.slice(0, showAll ? badges.length : 6).map((v, i) => {
+              let IconClass = `icon-${v.name.toLowerCase().replace(/ /g, '-')}`;
+              
+              if (v.name.toLowerCase() === 'homestead') {
+                IconClass = 'icon-combat-initiation';
+              } else if (v.name.toLowerCase() === 'bricksmith') {
+                IconClass = 'icon-warrior';
+              }
+              
               return <div className='col-4 col-lg-2' key={i}>
                 <Link href='/Badges.aspx' className={s.badgeLink}>
                   <a>
                     <div className={s.imageWrapper}>
-                      <span className={`icon-${v.name.toLowerCase().replace(/ /g, '-')}`}/>
+                      <span className={IconClass}/>
                     </div>
                     <p className={`${s.label} mb-0 text-dark`}>{v.name}</p>
                   </a>

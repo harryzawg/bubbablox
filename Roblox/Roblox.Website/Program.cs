@@ -36,7 +36,7 @@ Roblox.Services.Cache.Configure(configuration.GetSection("Redis").Value);
 builder.Services.AddTransient<NpgsqlConnection>(provider => 
 {
     var connection = new NpgsqlConnection(configuration.GetSection("Postgres").Value);
-    connection.Open();
+    //connection.Open();
     return connection;
 });
 #if RELEASE

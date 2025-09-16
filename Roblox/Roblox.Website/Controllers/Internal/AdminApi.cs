@@ -1466,13 +1466,23 @@ public class AdminApiController : ControllerBase
         });
         // actually unban
         await db.ExecuteAsync("DELETE FROM user_ban WHERE user_id = :id", new { id = request.userId });
+		// remove poison ban
+		await db.ExecuteAsync("UPDATE user_hashed_ips SET poisoned = false WHERE user_id = :user_id", new
+		{
+			user_id = request.userId,
+		});
     }
     
 	[HttpPost("ban"), StaffFilter(Access.BanUser)]
 	public async Task BanUser([Required, FromBody] BanUserRequest request)
 	{
-		DateTime? expirationDate = string.IsNullOrWhiteSpace(request.expires) ? null : DateTime.Parse(request.expires);
+		DateTime? expirationDate = string.IsNullOrWhiteSpace(request.expires) || request.expires == "Poisoned(IP)" || request.expires == "permanent" ? (DateTime?)null : DateTime.Parse(request.expires);
 		var doesExpire = expirationDate != null;
+		if (!string.IsNullOrWhiteSpace(request.expires) && request.expires != "Poisoned(IP)")
+		{
+			expirationDate = null;
+			doesExpire = false;
+		}
 		
 		var info = await services.users.GetUserById(request.userId);
 		if (info.accountStatus != AccountStatus.Ok && info.accountStatus != AccountStatus.Suppressed && info.accountStatus != AccountStatus.MustValidateEmail)
@@ -1511,14 +1521,27 @@ public class AdminApiController : ControllerBase
 		// mark as banned
 		await db.ExecuteAsync("UPDATE \"user\" SET status = :st WHERE id = :id", new
 		{
-			st =  doesExpire ? AccountStatus.Suppressed : AccountStatus.Deleted,
+			st = request.expires == "Poisoned(IP)" ? AccountStatus.Poisoned : (doesExpire ? AccountStatus.Suppressed : AccountStatus.Deleted),
 			id = request.userId,
 		});
+
 		// take all limited items off sale
 		await db.ExecuteAsync("UPDATE user_asset SET price = 0 WHERE price != 0 AND user_id = :user_id", new
 		{
 			user_id = request.userId,
 		});
+		// if poison ban, mark users ip as poisoned
+		if (request.expires == "Poisoned(IP)")
+		{
+			await db.ExecuteAsync(
+				"INSERT INTO user_hashed_ips (user_id, hashed_ip, last_seen, block_status, poisoned) " +
+				"VALUES (:user_id, '', NOW(), 0, true) " +
+				"ON CONFLICT (user_id) DO UPDATE SET poisoned = true, last_seen = NOW()",
+				new
+				{
+					user_id = request.userId,
+				});
+		}
 	}
 
     [HttpPost("user/create-message"), StaffFilter(Access.CreateMessage)]
@@ -1842,6 +1865,49 @@ public class AdminApiController : ControllerBase
 						"New RAP",
 						"Author ID",
 						"Author Username",
+					},
+				};
+			}
+			case "item-resale":
+			{
+			var result = await db.QueryAsync(
+				@"SELECT 
+					msa.id,
+					msa.user_asset_id,
+					msa.user_id,
+					u.username as user_name,
+					msa.asset_id,
+					a.name as asset_name,
+					msa.old_price,
+					msa.new_price,
+					msa.created_at,
+					msa.updated_at
+				  FROM moderation_sell_asset msa
+				  LEFT JOIN ""user"" u ON u.id = msa.user_id
+				  LEFT JOIN asset a ON a.id = msa.asset_id
+				  ORDER BY msa.id DESC
+				  LIMIT :limit OFFSET :offset",
+				new
+				{
+					limit,
+					offset,
+				});
+				
+				return new
+				{
+					data = result,
+					columns = new[]
+					{
+						"#",
+						"UAID",
+						"User ID",
+						"Username",
+						"Asset ID",
+						"Asset Name",
+						"Old Price",
+						"New Price",
+						"Created At",
+						"Updated At",
 					},
 				};
 			}

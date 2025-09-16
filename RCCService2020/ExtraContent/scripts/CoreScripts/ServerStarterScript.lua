@@ -35,7 +35,6 @@ local playerDialogMap = {}
 local placeId = game.PlaceId
 local serverOk = true
 local playersJoin = 0
-local url = "http://bbblox.org"
 
 local function post(endpoint, payloadTable)
     local json = http:JSONEncode(payloadTable)

@@ -4,6 +4,7 @@ using System.Text;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Security;
 using System.Collections.Concurrent;
 using Dapper;
@@ -320,15 +321,15 @@ public class GameServerService : ServiceBase
 					{
 						id = serverId
 					});
-					Console.WriteLine($"[GS] Deleted server {serverId} from DB");
+					Console.WriteLine($"[GS] deleted server {serverId} from DB");
 				}
 				catch (Exception ex)
 				{
-					Console.WriteLine($"[GS] Failed to delete server from DB {serverId}: {ex.Message}");
+					Console.WriteLine($"[GS] failed to delete server from DB {serverId}: {ex.Message}");
 				}
 			});
 			
-			Console.WriteLine($"GS {placeJobId} (place {placeId}) was successfully closed");
+			Console.WriteLine($"[GS] {placeJobId} (place {placeId}) was closed");
 		}
 		catch (Exception ex)
 		{
@@ -448,6 +449,19 @@ public class GameServerService : ServiceBase
 		
 		if (AvailableServer != null)
 		{
+			var ServerReady = await db.QueryFirstOrDefaultAsync<bool>(
+				"SELECT created_at != updated_at FROM asset_server WHERE id = :id::uuid",
+				new { id = AvailableServer.id });
+			
+			if (!ServerReady)
+			{
+				// if server hasn't pinged yet, return waiting until it has
+				return new GameServerGetOrCreateResponse() 
+				{ 
+					status = JoinStatus.Waiting 
+				};
+			}
+			
 			if (!currentGameServerPorts.ContainsKey(AvailableServer.id))
 			{
 				currentGameServerPorts[AvailableServer.id] = AvailableServer.port;
@@ -467,7 +481,10 @@ public class GameServerService : ServiceBase
 		// server limit of 5 for 1 place cause my server sucks
 		if (ServerCount >= 5)
 		{
-			return new GameServerGetOrCreateResponse() { status = JoinStatus.Waiting };
+			return new GameServerGetOrCreateResponse() 
+			{ 
+				status = JoinStatus.Waiting 
+			};
 		}
 		
 		// create new server
@@ -488,7 +505,10 @@ public class GameServerService : ServiceBase
 
 		if (NSPort == -1)
 		{
-			return new GameServerGetOrCreateResponse() { status = JoinStatus.Waiting };
+			return new GameServerGetOrCreateResponse() 
+			{ 
+				status = JoinStatus.Waiting 
+			};
 		}
 		var random = new Random();
 		for (int i = 0; i < 10; i++)
@@ -504,7 +524,10 @@ public class GameServerService : ServiceBase
 		
 		if (NSPort == -1 || RCCPort == -1)
 		{
-			return new GameServerGetOrCreateResponse() { status = JoinStatus.Waiting };
+			return new GameServerGetOrCreateResponse() 
+			{ 
+				status = JoinStatus.Waiting 
+			};
 		}
 
 		string Start = year switch
@@ -522,12 +545,17 @@ public class GameServerService : ServiceBase
 			currentGameServerPorts[jobId] = NSPort;
 			return new GameServerGetOrCreateResponse()
 			{
-				job = jobId,
-				status = JoinStatus.Joining
+				//job = jobId,
+				//status = JoinStatus.Joining
+				// wait until server starts and pings
+				status = JoinStatus.Waiting
 			};
 		}
 
-		return new GameServerGetOrCreateResponse() { status = JoinStatus.Waiting };
+		return new GameServerGetOrCreateResponse() 
+		{ 
+			status = JoinStatus.Waiting 
+		};
 	}
 
 	// TODO: MAKE this configurable
@@ -601,35 +629,35 @@ public class GameServerService : ServiceBase
 				</soap:Body>
 			</soap:Envelope>";
 
-	await SendSoapRequestToRcc($"http://127.0.0.1:{RCCPort}", XML, "OpenJobEx");
-	if (!currentPlaceIdsInUse.ContainsKey(placeId))
-	{
-		currentPlaceIdsInUse[placeId] = new List<string>();
-	}
-	currentPlaceIdsInUse[placeId].Add(jobId);
-	jobRccs.Add(jobId, rccServer);
-	
-	try
-	{
-		if (!string.IsNullOrEmpty(Configuration.Webhook))
+		await SendSoapRequestToRcc($"http://127.0.0.1:{RCCPort}", XML, "OpenJobEx");
+		if (!currentPlaceIdsInUse.ContainsKey(placeId))
 		{
-			var webhookcont = new
-			{
-				content = $"place {placeId} started with port {NSPort} on server {jobId}"
-			};
-			
-			using var httpClient = new HttpClient();
-			var content = new StringContent(JsonSerializer.Serialize(webhookcont), Encoding.UTF8, "application/json");
-			await httpClient.PostAsync(Configuration.Webhook, content);
+			currentPlaceIdsInUse[placeId] = new List<string>();
 		}
-	}
-	catch (Exception ex)
-	{
-		Console.WriteLine($"failed to send to webhook (did you configure it?): {ex.Message}");
-	}
+		currentPlaceIdsInUse[placeId].Add(jobId);
+		jobRccs.Add(jobId, rccServer);
+		
+		try
+		{
+			if (!string.IsNullOrEmpty(Configuration.Webhook))
+			{
+				var webhookcont = new
+				{
+					content = $"place {placeId} started with port {NSPort} on server {jobId}"
+				};
+				
+				using var httpClient = new HttpClient();
+				var content = new StringContent(JsonSerializer.Serialize(webhookcont), Encoding.UTF8, "application/json");
+				await httpClient.PostAsync(Configuration.Webhook, content);
+			}
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"failed to send to webhook (did you configure it?): {ex.Message}");
+		}
 
-	return "OK";
-}
+		return "OK";
+	}
 			
 	public async Task<string> StartGameServer2015(long placeId, int RCCPort, int NSPort, string jobId, int JobExpiration, long MaxPlayers)
 	{
@@ -698,37 +726,37 @@ public class GameServerService : ServiceBase
 				</soap:Body>
 			</soap:Envelope>";
 
-	await Task.Delay(5000);
-	await SendSoapRequestToRcc($"http://127.0.0.1:{RCCPort}", XML, "OpenJobEx");
-	if (!currentPlaceIdsInUse.ContainsKey(placeId))
-	{
-		currentPlaceIdsInUse[placeId] = new List<string>();
-	}
-	currentPlaceIdsInUse[placeId].Add(jobId);
-	currentGameServerPorts.Add(jobId, NSPort);
-	jobRccs.Add(jobId, rccServer);
-	
-	try
-	{
-		if (!string.IsNullOrEmpty(Configuration.Webhook))
+		await Task.Delay(5000);
+		await SendSoapRequestToRcc($"http://127.0.0.1:{RCCPort}", XML, "OpenJobEx");
+		if (!currentPlaceIdsInUse.ContainsKey(placeId))
 		{
-			var webhookcont = new
-			{
-				content = $"place {placeId} started with port {NSPort} on server {jobId}"
-			};
-			
-			using var httpClient = new HttpClient();
-			var content = new StringContent(JsonSerializer.Serialize(webhookcont), Encoding.UTF8, "application/json");
-			await httpClient.PostAsync(Configuration.Webhook, content);
+			currentPlaceIdsInUse[placeId] = new List<string>();
 		}
-	}
-	catch (Exception ex)
-	{
-		Console.WriteLine($"failed to send to webhook (did you configure it?): {ex.Message}");
-	}
+		currentPlaceIdsInUse[placeId].Add(jobId);
+		currentGameServerPorts.Add(jobId, NSPort);
+		jobRccs.Add(jobId, rccServer);
+		
+		try
+		{
+			if (!string.IsNullOrEmpty(Configuration.Webhook))
+			{
+				var webhookcont = new
+				{
+					content = $"place {placeId} started with port {NSPort} on server {jobId}"
+				};
+				
+				using var httpClient = new HttpClient();
+				var content = new StringContent(JsonSerializer.Serialize(webhookcont), Encoding.UTF8, "application/json");
+				await httpClient.PostAsync(Configuration.Webhook, content);
+			}
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"failed to send to webhook (did you configure it?): {ex.Message}");
+		}
 
-	return "OK";
-}
+		return "OK";
+	}
 
 	public async Task<string> StartGameServer2017(long placeId, int RCCPort, int NSPort, string jobId, int JobExpiration, long MaxPlayers)
 	{
@@ -839,6 +867,7 @@ public class GameServerService : ServiceBase
 		{
 			return "BAD";
 		}
+		await ModifyServerLua2018(Path.Combine(Configuration.RccService2018Path, "content", "scripts", "CoreScripts", "ServerStarterScript.lua"));
 		
 		await db.ExecuteAsync(
 			"INSERT INTO asset_server (id, asset_id, ip, port, RCCConnection) VALUES (:id::uuid, :asset_id, :ip, :port, :RCCConnection)",
@@ -978,6 +1007,8 @@ public class GameServerService : ServiceBase
 			return "BAD";
 		}
 		
+		await ModifyServerLua2018(Path.Combine(Configuration.RccService2020Path, "ExtraContent", "scripts", "CoreScripts", "ServerStarterScript.lua"));
+		
 		await db.ExecuteAsync(
 			"INSERT INTO asset_server (id, asset_id, ip, port, RCCConnection) VALUES (:id::uuid, :asset_id, :ip, :port, :RCCConnection)",
 			new
@@ -1115,6 +1146,32 @@ public class GameServerService : ServiceBase
 			.Replace("\"", "&quot;")
 			.Replace("'", "&apos;");
 	}
+	
+	private async Task ModifyServerLua2018(string Script)
+	{
+		try
+		{
+			if (File.Exists(Script))
+			{
+				string ScriptContent = await File.ReadAllTextAsync(Script);
+
+				string Pattern = @"authorization\s*=\s*""[^""]*""";
+				string Replacement = $"authorization = \"{Configuration.GameServerAuthorization}\"";
+				
+				string Modified = Regex.Replace(ScriptContent, Pattern, Replacement, RegexOptions.IgnoreCase);
+				
+				await File.WriteAllTextAsync(Script, Modified);
+			}
+			else
+			{
+				Console.WriteLine($"[INFO] ServerStarterScript not found");
+			}
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"[INFO] failed to edit ServerStarterScript.lua at {Script}: {ex.Message}");
+		}
+}
 	
 	private bool IsPortAvailable(int port)
 	{

@@ -382,9 +382,9 @@ namespace Roblox.Website.Controllers
 			// TODO: make this configurable!!!!!!!
 		    string expected = Roblox.Configuration.GameServerAuthorization;
 			
-			/* Console.WriteLine($"[DEBUG] got auth: {auth}");
+			/* Console.WriteLine($"[INFO] got auth: {auth}");
 
-			Console.WriteLine($"[DEBUG] expected auth: {expected}");
+			Console.WriteLine($"[INFO] expected auth: {expected}");
 			*/
 
 			if (auth != expected)
@@ -392,11 +392,9 @@ namespace Roblox.Website.Controllers
 				//string url = HttpContext.Request.GetEncodedUrl();
 				string ip = GetRequesterIpRaw(HttpContext);
 
-				Console.WriteLine($"[INFO] auth failed");
-
 				Roblox.Metrics.GameMetrics.ReportRccAuthorizationFailure("http://bbblox.org/gs/hi", auth, ip);
 				
-				Console.WriteLine($"[ERROR] auth failed");
+				Console.WriteLine($"[INFO] auth failed");
 
 				throw new BadRequestException();
 			}
@@ -407,7 +405,7 @@ namespace Roblox.Website.Controllers
         [HttpPostBypass("/gs/activity")]
         public async Task<dynamic> GetGsActivity([Required, MVC.FromBody] ReportActivity request)
         {
-            Console.WriteLine(request.authorization);
+            //Console.WriteLine(request.authorization);
 
             CheckServerAuth(request.authorization);
             var Result = await services.gameServer.GetLastServerPing(request.serverId);
@@ -428,7 +426,7 @@ namespace Roblox.Website.Controllers
 		[HttpPostBypass("/gs/shutdown")]
 		public async Task ShutDownServer([Required, MVC.FromBody] ReportActivity request)
 		{
-			CheckServerAuth(request.authorization);	
+			CheckServerAuth(request.authorization);
 			services.gameServer.ShutDownServer(request.serverId);
 		}
 

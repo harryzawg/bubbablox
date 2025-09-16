@@ -55,6 +55,7 @@
 					<option value='rap'>RAP UPDATE</option>
 					<option value='message'>ADMIN MESSAGE</option>
 					<option value='product'>PRODUCT UPDATE</option>
+					<option value='item-resale'>ITEM RESALE</option>
 					<option value='thumbnail'>THUMBNAIL UPDATE</option>
 					<option value='asset-modification'>ASSET MODIFICATION</option>
 					<option value='refund'>REFUND</option>

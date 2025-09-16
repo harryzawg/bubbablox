@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Diagnostics;
 using Dapper;
 using Roblox.Dto;
 using Roblox.Dto.Assets;
@@ -1344,26 +1345,40 @@ public class UsersService : ServiceBase, IService
         return result;
     }
 
-    public async Task SetPriceOfUserAsset(long userAssetId, long userId, long newPrice)
-    {
-        if (newPrice < 1 && newPrice != 0)
-            throw new ArgumentException("Price must be at least 1 Robux or 0");
+	public async Task SetPriceOfUserAsset(long userAssetId, long userId, long newPrice)
+	{
+		if (newPrice < 1 && newPrice != 0)
+			throw new ArgumentException("Price must be at least 1 Robux or 0");
 
-        await InTransaction(async _ =>
-        {
-            await using var userAssetLock = await AcquireUserAssetLock(userAssetId);
-            
-            var currentOwner = await GetUserAssetById(userAssetId);
-            if (currentOwner.userId != userId)
-                throw new RobloxException(401, 0, "Cannot change the price of this item");
-            
-            await UpdateAsync("user_asset", userAssetId, new
-            {
-                price = newPrice,
-            });
-            return 0;
-        });
-    }
+		await InTransaction(async _ =>
+		{
+			await using var userAssetLock = await AcquireUserAssetLock(userAssetId);
+			
+			var currentOwner = await GetUserAssetById(userAssetId);
+			if (currentOwner.userId != userId)
+				throw new RobloxException(401, 0, "Cannot change the price of this item");
+			
+			var CurrentPrice = currentOwner.price;
+			
+			await UpdateAsync("user_asset", userAssetId, new
+			{
+				price = newPrice,
+			});
+
+			await InsertAsync("moderation_sell_asset", new
+			{
+				user_asset_id = userAssetId,
+				user_id = userId,
+				asset_id = currentOwner.assetId,
+				old_price = CurrentPrice,
+				new_price = newPrice,
+				created_at = DateTime.UtcNow,
+				updated_at = DateTime.UtcNow
+			});
+			
+			return 0;
+		});
+	}
 
     public async Task<EconomySummary> GetTransactionSummary(long userId, DateTime minCreationDate)
     {
@@ -2098,6 +2113,13 @@ public class UsersService : ServiceBase, IService
             }
         });
     }
+	
+	public async Task<bool> IsUserPoisoned(string hashedIp)
+	{
+		return await db.ExecuteScalarAsync<bool>(
+			"SELECT EXISTS(SELECT 1 FROM user_hashed_ips WHERE hashed_ip = @hashedIp AND poisoned = true)",
+			new { hashedIp });
+	}
 
     public async Task<UserBanEntry> GetBanData(long userId)
     {

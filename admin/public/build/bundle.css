@@ -2444,6 +2444,10 @@ img.avatar-thumb {
   margin-right: 0.25rem !important;
 }
 
+.ml-1 {
+  margin-left: 0.25rem !important;
+}
+
 .ml-2 {
   margin-left: 0.5rem !important;
 }
