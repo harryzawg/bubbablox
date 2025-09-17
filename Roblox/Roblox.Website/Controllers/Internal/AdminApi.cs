@@ -1911,6 +1911,50 @@ public class AdminApiController : ControllerBase
 					},
 				};
 			}
+			case "item-resale-purchase":
+			{
+			var result = await db.QueryAsync(
+				@"SELECT 
+					mpra.id,
+					mpra.user_asset_id,
+					mpra.buyer_user_id,
+					ub.username as buyer_username,
+					mpra.seller_user_id,
+					us.username as seller_username,
+					mpra.asset_id,
+					mpra.purchase_price,
+					mpra.created_at,
+					mpra.updated_at
+				  FROM moderation_purchase_resale_asset mpra
+				  LEFT JOIN ""user"" ub ON ub.id = mpra.buyer_user_id
+				  LEFT JOIN ""user"" us ON us.id = mpra.seller_user_id
+				  LEFT JOIN asset a ON a.id = mpra.asset_id
+				  ORDER BY mpra.id DESC
+				  LIMIT :limit OFFSET :offset",
+				new
+				{
+					limit,
+					offset,
+				});
+				
+				return new
+				{
+					data = result,
+					columns = new[]
+					{
+						"#",
+						"UAID",
+						"Buyer User ID",
+						"Buyer Username",
+						"Seller User ID",
+						"Seller Username",
+						"Asset ID",
+						"Purchase Price",
+						"Created At",
+						"Updated At",
+					},
+				};
+			}
 			case "asset-modification":
 			{
 				var result = await db.QueryAsync(
@@ -4606,12 +4650,13 @@ Thank you for your understanding,
 	{
 		public string ServerId { get; set; }
 	}
-
-	public class KillRCCReq
+	
+	[HttpGet("game-servers/status"), StaffFilter(Access.ManageRunningGameServers)]
+	public async Task<dynamic> GetGameServerStatus()
 	{
-		public int ProcessId { get; set; }
+		return await services.gameServer.GetStatus();
 	}
-		
+
 	[HttpGet("game-servers/running"), StaffFilter(Access.ManageRunningGameServers)]
 	public async Task<dynamic> GetRunningGameServers()
 	{
@@ -4689,97 +4734,6 @@ Thank you for your understanding,
 			{
 				Success = false,
 				Message = $"Failed to shutdown server: {ex.Message}"
-			};
-		}
-	}
-
-	[HttpGet("RCC-internal/rcc-processes"), StaffFilter(Access.ManageRCCInstances)]
-	public dynamic GetRCCProcesses()
-	{
-		var processes = new List<dynamic>();
-		
-		foreach (var kvp in services.gameServer.JobRccs)
-		{
-			var process = kvp.Value;
-			
-			try
-			{
-				processes.Add(new
-				{
-					ProcessId = process.Id,
-					JobId = kvp.Key,
-					MemoryUsageMB = process.WorkingSet64 / 1024 / 1024,
-					StartTime = process.StartTime,
-					Responding = process.Responding,
-					HasExited = process.HasExited
-				});
-			}
-			catch (Exception ex)
-			{
-				// if it exited already for some reason then just return this
-				processes.Add(new
-				{
-					ProcessId = -1,
-					JobId = kvp.Key,
-					MemoryUsageMB = 0,
-					StartTime = DateTime.MinValue,
-					Responding = false,
-					HasExited = true,
-					Error = ex.Message
-				});
-			}
-		}
-		
-		return processes;
-	}
-
-	[HttpPost("RCC-Internal/rcc-processes/kill"), StaffFilter(Access.ManageRCCInstances)]
-	public dynamic KillRCCProcess([Required, FromBody] KillRCCReq request)
-	{
-		try
-		{
-			var process = services.gameServer.JobRccs.Values.FirstOrDefault(p => p.Id == request.ProcessId);	
-			
-			if (process == null)
-			{
-				return new
-				{
-					Success = false,
-					Message = $"Process with ID {request.ProcessId} not found"
-				};
-			}
-			
-			if (process.HasExited)
-			{
-				return new
-				{
-					Success = false,
-					Message = $"Process {request.ProcessId} has already exited"
-				};
-			}
-			
-			process.Kill();
-			process.WaitForExit(5000);
-			
-			var jobId = services.gameServer.JobRccs.FirstOrDefault(x => x.Value.Id == request.ProcessId).Key;
-			
-			if (!string.IsNullOrEmpty(jobId))
-			{
-				services.gameServer.ShutDownServer(jobId);
-			}
-			
-			return new
-			{
-				Success = true,
-				Message = $"Process {request.ProcessId} killed successfully"
-			};
-		}
-		catch (Exception ex)
-		{
-			return new
-			{
-				Success = false,
-				Message = $"Failed to kill process: {ex.Message}"
 			};
 		}
 	}

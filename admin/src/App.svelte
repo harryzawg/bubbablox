@@ -19,7 +19,7 @@
 	import OpenGift from "./pages/OpenGift.svelte";
 	import SetRAP from "./pages/SetRAP.svelte";
 	import Promocodes from "./pages/Promocodes.svelte";
-	import ManageRCC from "./pages/ManageRCC.svelte";
+	import GameServerStatus from "./pages/GameServerStatus.svelte";
 	import ManageGameServers from "./pages/ManageGameServers.svelte";
 	import CreateAssetForItem from "./pages/CreateAssetForItem.svelte";
 	import CreateAsset from "./pages/CreateAsset.svelte";
@@ -132,8 +132,8 @@ import UploadCustomItem from "./pages/UploadCustomItem.svelte";
 		<Route path="/admin/game-servers/manage">
 			<ManageGameServers />
 		</Route>
-		<Route path="/admin/RCC/manage">
-			<ManageRCC />
+		<Route path="/admin/game-servers/status">
+			<GameServerStatus />
 		</Route>
 		<Route path="/admin/force-application">
 			<ForceApplication />

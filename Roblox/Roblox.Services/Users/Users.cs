@@ -1890,6 +1890,16 @@ public class UsersService : ServiceBase, IService
             // log.Info("purchase success");
             // Finally, metrics
             EconomyMetrics.ReportRobuxVolumeChange(userAsset.price);
+			await InsertAsync("moderation_purchase_resale_asset", new
+			{
+				user_asset_id = userAsset.userAssetId,
+				buyer_user_id = userIdBuyer,
+				seller_user_id = userAsset.userId,
+				asset_id = userAsset.assetId,
+				purchase_price = userAsset.price,
+				created_at = DateTime.UtcNow,
+				updated_at = DateTime.UtcNow
+			});
             return 0;
         });
     }

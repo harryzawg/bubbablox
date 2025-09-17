@@ -86,6 +86,5 @@ public enum Access
     RefundAndDeleteFirstPartyAssetSale,
     ManagePromocodes,
 	ManageRunningGameServers,
-	ManageRCCInstances,
 	ManageVerifiedTicks,
 }

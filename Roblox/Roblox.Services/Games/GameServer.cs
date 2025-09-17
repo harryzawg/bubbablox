@@ -403,6 +403,102 @@ public class GameServerService : ServiceBase
         });
     }
 	
+	public async Task<dynamic> GetStatus()
+	{
+		var JobRCCList = new List<dynamic>();
+		
+		foreach (var kvp in jobRccs)
+		{
+			var process = kvp.Value;
+			try
+			{
+				JobRCCList.Add(new
+				{
+					jobId = kvp.Key,
+					processId = process.Id,
+					processName = process.ProcessName,
+					hasExited = process.HasExited,
+					startTime = process.StartTime,
+					memoryUsage = process.WorkingSet64 / 1024 / 1024 + " MB",
+					memoryUsageMB = process.WorkingSet64 / 1024 / 1024,
+					threads = process.Threads.Count,
+					responding = !process.HasExited && process.Responding
+				});
+			}
+			catch (Exception)
+			{
+				JobRCCList.Add(new
+				{
+					jobId = kvp.Key,
+					processId = -1,
+					processName = "RCCService",
+					hasExited = true,
+					startTime = DateTime.MinValue,
+					memoryUsage = "Error",
+					memoryUsageMB = 0,
+					threads = 0,
+					responding = false
+				});
+			}
+		}
+
+		var serverPlayers = new Dictionary<string, int>();
+		foreach (var jobId in currentGameServerPorts.Keys)
+		{
+			try
+			{
+				var players = await GetGameServerPlayers(jobId);
+				serverPlayers[jobId] = players.Count();
+			}
+			catch
+			{
+				serverPlayers[jobId] = 0;
+			}
+		}
+
+		var gameServerPorts = currentGameServerPorts.Select(kvp => new
+		{
+			jobId = kvp.Key,
+			port = kvp.Value,
+			playerCount = serverPlayers.TryGetValue(kvp.Key, out var count) ? count : 0
+		}).ToList();
+
+		var placesInUse = currentPlaceIdsInUse.Select(kvp => new
+		{
+			placeId = kvp.Key,
+			jobIds = kvp.Value.ToList(),
+			totalServers = kvp.Value.Count
+		}).ToList();
+
+		var statistics = new
+		{
+			TotalRunningServers = JobRCCList.Count(p => !p.hasExited),
+			TotalPlayersInGame = CurrentPlayersInGame.Count,
+			TotalPortsUsed = currentGameServerPorts.Count,
+			TotalPlacesRunning = currentPlaceIdsInUse.Count,
+			TotalRCCs = jobRccs.Count
+		};
+
+		return new
+		{
+			jobRccs = JobRCCList,
+			currentGameServerPorts = gameServerPorts,
+			currentPlaceIdsInUse = placesInUse,
+			mainRCCPortsInUse = mainRCCPortsInUse.Select(kvp => new
+			{
+				processId = kvp.Key.Id,
+				port = kvp.Value,
+				processName = kvp.Key.ProcessName
+			}),
+			currentPlayersInGame = CurrentPlayersInGame.Select(kvp => new
+			{
+				userId = kvp.Key,
+				placeId = kvp.Value
+			}),
+			statistics = statistics
+		};
+	}
+		
 	private async Task<long> GetMaxPlayerCount(long placeId)
 	{	
 		using var gamesService = ServiceProvider.GetOrCreate<GamesService>();
