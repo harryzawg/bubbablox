@@ -151,7 +151,6 @@ namespace Roblox.Website.Controllers
             }
             try
             {
-                // this has gotta be a Type somewhere right
                 return new
                 {
                     TargetId = details.id,
@@ -194,10 +193,6 @@ namespace Roblox.Website.Controllers
 			FeatureFlags.FeatureCheck(FeatureFlag.EconomyEnabled);
 			var stopwatch = new Stopwatch();
 			stopwatch.Start();
-			
-			// some sanity checks
-			Console.WriteLine(purchaseRequest.productId);
-			Console.WriteLine(purchaseRequest.locationId);
 			
 			long userId;
 
@@ -259,7 +254,7 @@ namespace Roblox.Website.Controllers
 			if (purchaseRequest.productId is 0 or < 0)
 				purchaseRequest.productId = 0;
 			if (productInfo.isLimited || productInfo.isLimitedUnique) 
-				throw new BadRequestException(0, "Cannot purchase limited or limited unique items through this endpoint");
+				throw new BadRequestException(0, "Cannot purchase Limited/Limited Unique items in game");
 			
 			await services.users.PurchaseNormalItem(userId, purchaseRequest.productId,
 				purchaseRequest.currencyTypeId);
@@ -276,23 +271,14 @@ namespace Roblox.Website.Controllers
 			};
 		}
 
-        // look for dev prod, if not, look for normal asset, if not 400
         [HttpGetBypass("marketplace/productdetails")]
         public async Task<dynamic> GetProductDetailsMarketplace(long productId)
         {
-            // based off of
-            // https://web.archive.org/web/20220707014309/https://api.roblox.com/marketplace/productDetails?productId=19804017
-            // and
-            // https://web.archive.org/web/20171112192130/http://api.roblox.com/Marketplace/Productinfo?assetid=1149615185
-            // (where it's not a developer product)
             try
             {
                 var details = await services.assets.GetAssetCatalogInfo(productId);
                 return new
                 {
-                    // on roblox this usually leads to the id of a random shirt template??? LMFAOOOO
-                    // idfk why and i dont really care to figure out cuz i dont think its necessary
-                    // so for convenience sake of anyone using this api im putting the universe id
                     TargetId = 180,
                     AssetId = 0,
                     ProductId = details.id,
@@ -304,9 +290,6 @@ namespace Roblox.Website.Controllers
                     {
                         Id = 0,
                         Name = (string?)null,
-                        // once again roblox api is weird
-                        // these are usually null and 0 respectively but
-                        // for convenience sakes ive set to the actual values
                         CreatorType = details.creatorType
                     },
                     Created = details.createdAt,
@@ -329,13 +312,9 @@ namespace Roblox.Website.Controllers
             throw new BadRequestException(0, "Asset " + productId + " does not exist.");
         }
 
-        // Studio
         [HttpGetBypass("marketplace/game-pass-product-info")]
         public async Task<dynamic> GetPassInfo(long gamePassId)
         {
-            // based off of this
-            // https://web.archive.org/web/20211201073809/https://api.roblox.com/marketplace/game-pass-product-info?gamePassId=12828275
-
             var details = await services.assets.GetAssetCatalogInfo(gamePassId);
 
             return new

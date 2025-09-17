@@ -145,6 +145,7 @@ builder.Services.AddHttpClient("FrontendProxy", client =>
     UseCookies = false
 })
 .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
+builder.Services.AddMemoryCache();
 
 var app = builder.Build();
 

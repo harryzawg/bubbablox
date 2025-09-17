@@ -194,7 +194,8 @@ namespace Roblox.Website.Controllers
 			{
 				throw new RobloxException(401, 0, "Not authenticated");
 			}
-
+			
+			await db.OpenAsync();
 			code = code.Trim().ToUpper();
 			var userId = userSession.userId;
 
@@ -313,7 +314,7 @@ namespace Roblox.Website.Controllers
 			}
 			finally
 			{
-				// idk man
+				// idk man do something here
 			}
 		}
     }

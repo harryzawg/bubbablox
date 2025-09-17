@@ -3,6 +3,7 @@ using System.Text;
 using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Net.Http.Headers;
+using Microsoft.Extensions.Caching.Memory;
 using Roblox.Logging;
 using Roblox.Models.Sessions;
 using Roblox.Models.Users;
@@ -15,15 +16,16 @@ namespace Roblox.Website.Middleware;
 public class FrontendProxyMiddleware
 {
     private RequestDelegate _next;
-
 	private readonly IHttpClientFactory _httpClientFactory;
+	private readonly IMemoryCache _cache;
 
-	public FrontendProxyMiddleware(RequestDelegate next, IHttpClientFactory httpClientFactory)
+	public FrontendProxyMiddleware(RequestDelegate next, IHttpClientFactory httpClientFactory, IMemoryCache cache)
 	{
 		_next = next;
 		_httpClientFactory = httpClientFactory;
+		_cache = cache;
 	}
-
+	
     public static List<string> BypassUrls = new()
     {
         "/apisite/",
@@ -72,7 +74,6 @@ public class FrontendProxyMiddleware
         "/comments/post",
         "/usercheck/show-tos",
         "/search/users/results",
-        "/users/set-builders-club",
 		"/images/thumbnails",
 		"/images",
         // Web - Game
@@ -89,6 +90,8 @@ public class FrontendProxyMiddleware
 		"/game/luawebservice/handlesocialrequest.ashx",
 		"/UserCheck/checkifinvalidusernameforsignup",
 		"/develop/upload-version",
+		"/develop/upload-icon",
+		"/develop/upload",
         // gs
         "/gs/activity",
         "/gs/ping",
@@ -141,102 +144,17 @@ public class FrontendProxyMiddleware
         }
         frontendTimer.Stop();
     }
-
-	// this is the worst shit fucking ever
-	private static readonly ConcurrentDictionary<string, CacheEntry> pageCache = new();
-	private static readonly TimeSpan cacheExpiration = TimeSpan.FromMinutes(30);
-	private static readonly int maxCache = 1000;
-	private static readonly SemaphoreSlim cacheLock = new(1, 1);
-	private static DateTime lastCleanup = DateTime.UtcNow;
-
+	
 	private class CacheEntry
 	{
-		public string ContentType { get; set; }
-		public string Content { get; set; }
-		public string LocationHeader { get; set; }
+		public string ContentType { get; set; } = "text/html";
+		public string Content { get; set; } = "";
+		public string LocationHeader { get; set; } = "";
 		public int StatusCode { get; set; }
-		public DateTime CreatedAt { get; set; }
-		public DateTime LastAccessed { get; set; }
 	}
 
-	private CacheEntry? GetPageFromCache(string url)
-	{
-		if (pageCache.TryGetValue(url, out var entry))
-		{
-			entry.LastAccessed = DateTime.UtcNow;
-			return entry;
-		}
-		return null;
-	}
-
-	private async Task AddToCacheAsync(string url, string contentType, string content, string locationHeader, int statusCode)
-	{
-		try
-		{
-			if (pageCache.Count >= maxCache || (DateTime.UtcNow - lastCleanup).TotalMinutes > 5)
-			{
-				await CleanupCacheAsync();
-			}
-
-			var newEntry = new CacheEntry
-			{
-				ContentType = contentType,
-				Content = content,
-				LocationHeader = locationHeader,
-				StatusCode = statusCode,
-				CreatedAt = DateTime.UtcNow,
-				LastAccessed = DateTime.UtcNow
-			};
-
-			pageCache.AddOrUpdate(url, newEntry, (key, oldValue) => newEntry);
-		}
-		catch (Exception ex)
-		{
-			Console.WriteLine($"cache failed for {url}: {ex.Message}");
-		}
-	}
-
-	private async Task CleanupCacheAsync()
-	{
-		if (!await cacheLock.WaitAsync(0))
-			return;
-
-		try
-		{
-			var now = DateTime.UtcNow;
-			var itemsToRemove = new List<string>();
-
-			foreach (var item in pageCache)
-			{
-				if ((now - item.Value.LastAccessed) > cacheExpiration)
-				{
-					itemsToRemove.Add(item.Key);
-				}
-			}
-
-			if (pageCache.Count - itemsToRemove.Count >= maxCache)
-			{
-				var lruCandidates = pageCache
-					.Where(x => !itemsToRemove.Contains(x.Key))
-					.OrderBy(x => x.Value.LastAccessed)
-					.Take(pageCache.Count - maxCache + itemsToRemove.Count)
-					.Select(x => x.Key);
-				
-				itemsToRemove.AddRange(lruCandidates);
-			}
-
-			foreach (var key in itemsToRemove)
-			{
-				pageCache.TryRemove(key, out _);
-			}
-
-			lastCleanup = DateTime.UtcNow;
-		}
-		finally
-		{
-			cacheLock.Release();
-		}
-	}
+	// this is the worst shit fucking ever
+	private static readonly TimeSpan cacheExpiration = TimeSpan.FromMinutes(30);
 	
 	private string FixDoubleSlashes(string url)
 	{
@@ -276,10 +194,9 @@ public class FrontendProxyMiddleware
 		}
 
 	#if RELEASE
-		var cached = GetPageFromCache(requestUrl);
-		if (cached != null)
+		if (_cache.TryGetValue(requestUrl, out CacheEntry cached))
 		{
-			ctx.Response.Headers.Add("x-cache-dbg", "f-2016; memv2;");
+			ctx.Response.Headers.Add("x-cache-dbg", "f-2016; memv3;");
 			await HandleProxyResult(requestUrl, cached.ContentType, cached.StatusCode, cached.LocationHeader, ctx);
 			await ctx.Response.WriteAsync(cached.Content);
 			return;
@@ -308,9 +225,17 @@ public class FrontendProxyMiddleware
 			if (cacheable)
 			{
 				var contentStr = await result.Content.ReadAsStringAsync(cts.Token);
-				
-				_ = Task.Run(() => AddToCacheAsync(requestUrl, contentType, contentStr, locationHeader, statusCode));
-				
+
+				var entry = new CacheEntry
+				{
+					ContentType = contentType!,
+					Content = contentStr,
+					LocationHeader = locationHeader ?? string.Empty,
+					StatusCode = statusCode
+				};
+
+				_cache.Set(requestUrl, entry, TimeSpan.FromMinutes(30));
+
 				await HandleProxyResult(requestUrl, contentType, statusCode, locationHeader, ctx);
 				await ctx.Response.WriteAsync(contentStr);
 			}

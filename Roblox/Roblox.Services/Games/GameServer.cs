@@ -32,12 +32,12 @@ public class GameServerService : ServiceBase
     private static Random RandomComponent = new Random();
     private static PasswordHasher hasher { get; } = new();
     private static Dictionary<long, long> gamePlayerCounts = new Dictionary<long, long>(); // placeid, playercount
-    private static Dictionary<string, Process> jobRccs = new Dictionary<string, Process>(); // jobid, rcc process
-    public static Dictionary<string, int> currentGameServerPorts = new Dictionary<string, int>() {}; // networkserver ports, jobid, port
-    private static Dictionary<long, List<string>> currentPlaceIdsInUse = new Dictionary<long, List<string>>(); // placeid, jobid
+    private static ConcurrentDictionary<string, Process> jobRccs = new ConcurrentDictionary<string, Process>(); // jobid, rcc process
+    public static ConcurrentDictionary<string, int> currentGameServerPorts = new ConcurrentDictionary<string, int>(); // networkserver ports, jobid, port
+    private static ConcurrentDictionary<long, ConcurrentBag<string>> currentPlaceIdsInUse = new ConcurrentDictionary<long, ConcurrentBag<string>>(); // placeid, jobid
     public static Dictionary<long, long> CurrentPlayersInGame = new Dictionary<long, long>() { }; // userid, placeid
     public static Dictionary<Process, int> mainRCCPortsInUse = new Dictionary<Process, int>(); // Process, main RCC soap port
-	public Dictionary<string, Process> JobRccs => jobRccs;
+	public ConcurrentDictionary<string, Process> JobRccs => jobRccs;
     public static void Configure(string newJwtKey)
     {
         jwtKey = newJwtKey;
@@ -300,16 +300,16 @@ public class GameServerService : ServiceBase
 			}
 
 			// clean up
-			if (currentPlaceIdsInUse.ContainsKey(placeId))
+			if (currentPlaceIdsInUse.TryGetValue(placeId, out var jobList))
 			{
-				currentPlaceIdsInUse[placeId].Remove(placeJobId);
-				if (currentPlaceIdsInUse[placeId].Count == 0)
-				{
-					currentPlaceIdsInUse.Remove(placeId);
-				}
+				var DagLover34 = new ConcurrentBag<string>(jobList.Where(j => j != placeJobId));
+				if (DagLover34.IsEmpty)
+					currentPlaceIdsInUse.TryRemove(placeId, out _);
+				else
+					currentPlaceIdsInUse[placeId] = DagLover34;
 			}
-			currentGameServerPorts.Remove(placeJobId);
-			jobRccs.Remove(placeJobId);
+			currentGameServerPorts.TryRemove(placeJobId, out var removedNSport);
+			jobRccs.TryRemove(placeJobId, out var removedRCCport);
 			mainRCCPortsInUse.Remove(rccProcess);
 			RemoveAllPlayersFromPlaceId(placeId);
 			
@@ -458,7 +458,7 @@ public class GameServerService : ServiceBase
 				// if server hasn't pinged yet, return waiting until it has
 				return new GameServerGetOrCreateResponse() 
 				{ 
-					status = JoinStatus.Waiting 
+					status = JoinStatus.Waiting
 				};
 			}
 			
@@ -474,19 +474,6 @@ public class GameServerService : ServiceBase
 			};
 		}
 		
-		var ServerCount = await db.QueryFirstOrDefaultAsync<int>(
-			"SELECT COUNT(*) FROM asset_server WHERE asset_id = :placeId AND updated_at > NOW() - INTERVAL '5 minutes'",
-			new { placeId });
-		
-		// server limit of 5 for 1 place cause my server sucks
-		if (ServerCount >= 5)
-		{
-			return new GameServerGetOrCreateResponse() 
-			{ 
-				status = JoinStatus.Waiting 
-			};
-		}
-		
 		// create new server
 		string jobId = Guid.NewGuid().ToString();
 		int NSPort = -1;
@@ -495,7 +482,7 @@ public class GameServerService : ServiceBase
 		var RandomNSPort = Configuration.AllowedNetworkPorts.OrderBy(x => Guid.NewGuid());
 		foreach (var port in RandomNSPort)
 		{
-			if (IsPortAvailable(port) && !currentGameServerPorts.Values.Contains(port))
+			if (IsPortAvailable(port) && !currentGameServerPorts.Values.Any(x => x == port))
 			//if (IsPortAvailableTCP(port))
 			{
 				NSPort = port;
@@ -545,10 +532,10 @@ public class GameServerService : ServiceBase
 			currentGameServerPorts[jobId] = NSPort;
 			return new GameServerGetOrCreateResponse()
 			{
-				//job = jobId,
+				job = jobId,
 				//status = JoinStatus.Joining
 				// wait until server starts and pings
-				status = JoinStatus.Waiting
+				status = JoinStatus.Loading
 			};
 		}
 
@@ -630,12 +617,10 @@ public class GameServerService : ServiceBase
 			</soap:Envelope>";
 
 		await SendSoapRequestToRcc($"http://127.0.0.1:{RCCPort}", XML, "OpenJobEx");
-		if (!currentPlaceIdsInUse.ContainsKey(placeId))
-		{
-			currentPlaceIdsInUse[placeId] = new List<string>();
-		}
-		currentPlaceIdsInUse[placeId].Add(jobId);
-		jobRccs.Add(jobId, rccServer);
+		var jobList = currentPlaceIdsInUse.GetOrAdd(placeId, _ => new ConcurrentBag<string>());
+		jobList.Add(jobId);
+		currentGameServerPorts.TryAdd(jobId, NSPort);
+		jobRccs[jobId] = rccServer;
 		
 		try
 		{
@@ -728,13 +713,10 @@ public class GameServerService : ServiceBase
 
 		await Task.Delay(5000);
 		await SendSoapRequestToRcc($"http://127.0.0.1:{RCCPort}", XML, "OpenJobEx");
-		if (!currentPlaceIdsInUse.ContainsKey(placeId))
-		{
-			currentPlaceIdsInUse[placeId] = new List<string>();
-		}
-		currentPlaceIdsInUse[placeId].Add(jobId);
-		currentGameServerPorts.Add(jobId, NSPort);
-		jobRccs.Add(jobId, rccServer);
+		var jobList = currentPlaceIdsInUse.GetOrAdd(placeId, _ => new ConcurrentBag<string>());
+		jobList.Add(jobId);
+		jobRccs[jobId] = rccServer;
+		currentGameServerPorts.TryAdd(jobId, NSPort);
 		
 		try
 		{
@@ -826,13 +808,10 @@ public class GameServerService : ServiceBase
 			</soap:Envelope>";
 
 		await SendSoapRequestToRcc($"http://127.0.0.1:{RCCPort}", XML, "OpenJobEx");
-		if (!currentPlaceIdsInUse.ContainsKey(placeId))
-		{
-			currentPlaceIdsInUse[placeId] = new List<string>();
-		}
-		currentPlaceIdsInUse[placeId].Add(jobId);
-		currentGameServerPorts.Add(jobId, NSPort);
-		jobRccs.Add(jobId, rccServer);
+		var jobList = currentPlaceIdsInUse.GetOrAdd(placeId, _ => new ConcurrentBag<string>());
+		jobList.Add(jobId);
+		jobRccs[jobId] = rccServer;
+		currentGameServerPorts.TryAdd(jobId, NSPort);
 		
 		try
 		{
@@ -961,13 +940,10 @@ public class GameServerService : ServiceBase
 
 		try
 		{
-			if (!currentPlaceIdsInUse.ContainsKey(placeId))
-			{
-				currentPlaceIdsInUse[placeId] = new List<string>();
-			}
-			currentPlaceIdsInUse[placeId].Add(jobId);
-			currentGameServerPorts.Add(jobId, NSPort);
-			jobRccs.Add(jobId, rccServer);
+			var jobList = currentPlaceIdsInUse.GetOrAdd(placeId, _ => new ConcurrentBag<string>());
+			jobList.Add(jobId);
+			jobRccs[jobId] = rccServer;
+			currentGameServerPorts.TryAdd(jobId, NSPort);
 			try
 			{
 				if (!string.IsNullOrEmpty(Configuration.Webhook))
@@ -1100,13 +1076,10 @@ public class GameServerService : ServiceBase
 
 		try
 		{
-			if (!currentPlaceIdsInUse.ContainsKey(placeId))
-			{
-				currentPlaceIdsInUse[placeId] = new List<string>();
-			}
-			currentPlaceIdsInUse[placeId].Add(jobId);
-			currentGameServerPorts.Add(jobId, NSPort);
-			jobRccs.Add(jobId, rccServer);
+			var jobList = currentPlaceIdsInUse.GetOrAdd(placeId, _ => new ConcurrentBag<string>());
+			jobList.Add(jobId);
+			jobRccs[jobId] = rccServer;
+			currentGameServerPorts.TryAdd(jobId, NSPort);
 			try
 			{
 				if (!string.IsNullOrEmpty(Configuration.Webhook))
@@ -1178,7 +1151,7 @@ public class GameServerService : ServiceBase
 		try
 		{
 			// see if our gs dict contains any in use ports
-			if (currentGameServerPorts.ContainsValue(port))
+			if (currentGameServerPorts.Values.Any(x => x == port))
 			{
 				return false;
 			}

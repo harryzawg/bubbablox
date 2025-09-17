@@ -104,7 +104,8 @@ local function reportplayer(userId, eventType)
 end
 
 local function pollToReportActivity()
-	while serverOk do
+	--while serverOk do
+	while true do
 		local ok, err = pcall(function()
 			game:HttpPost(url .. "/gs/ping", http:JSONEncode({
 				authorization = "_AUTHORIZATION_STRING_",

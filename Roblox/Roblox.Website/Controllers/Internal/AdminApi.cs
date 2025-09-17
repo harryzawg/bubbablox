@@ -4708,25 +4708,21 @@ Thank you for your understanding,
 				{
 					ProcessId = process.Id,
 					JobId = kvp.Key,
-					ProcessName = process.ProcessName,
 					MemoryUsageMB = process.WorkingSet64 / 1024 / 1024,
 					StartTime = process.StartTime,
-					TotalProcessorTime = process.TotalProcessorTime,
 					Responding = process.Responding,
 					HasExited = process.HasExited
 				});
 			}
 			catch (Exception ex)
 			{
-				// Process might have exited already
+				// if it exited already for some reason then just return this
 				processes.Add(new
 				{
 					ProcessId = -1,
 					JobId = kvp.Key,
-					ProcessName = "Unknown",
 					MemoryUsageMB = 0,
 					StartTime = DateTime.MinValue,
-					TotalProcessorTime = TimeSpan.Zero,
 					Responding = false,
 					HasExited = true,
 					Error = ex.Message
@@ -4816,7 +4812,7 @@ Thank you for your understanding,
 				}
 				catch (Exception ex)
 				{
-					Writer.Info(LogGroup.AdminApi, $"Failed to cleanup orphaned server {serverId}: {ex.Message}");
+					Writer.Info(LogGroup.AdminApi, $"failed to cleanup stupid orphan {serverId}: {ex.Message}");
 				}
 			}
 		}

@@ -2540,6 +2540,16 @@ WHERE asset_type = :asset_type AND asset.id < :id AND NOT asset.is_18_plus ORDER
         });
     }
 	
+	public async Task IncrementBadgeAwarded(long badgeId)
+    {
+        await db.ExecuteAsync(
+            "UPDATE asset_place_badge SET awarded = awarded + 1 WHERE badgeId = :id",
+            new
+            {
+                id = badgeId,
+            });
+    }
+
 	public async Task InsertBadge(long badgeId, long placeId, long userId)
 	{
 		await ValidatePermissions(placeId, userId);
