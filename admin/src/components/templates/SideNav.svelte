@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { link } from "svelte-routing";
-	import { HomeIcon, CopyIcon, UsersIcon, UserIcon, UserPlusIcon, GiftIcon, ServerIcon, CpuIcon, ImageIcon, DollarSignIcon, BookOpenIcon, EyeIcon, PlusCircleIcon, EditIcon, FilePlusIcon, RefreshCcwIcon, UploadCloudIcon, CheckSquareIcon, TagIcon, SunriseIcon, FlagIcon, StarIcon, BookIcon, PhoneIcon, ActivityIcon, TabletIcon, ChevronDownIcon, ChevronRightIcon } from "svelte-feather-icons";
+	import { HomeIcon, CopyIcon, UsersIcon, UserIcon, UserPlusIcon, GiftIcon, ServerIcon, CpuIcon, MonitorIcon, ImageIcon, DollarSignIcon, BookOpenIcon, EyeIcon, PlusCircleIcon, EditIcon, FilePlusIcon, RefreshCcwIcon, UploadCloudIcon, CheckSquareIcon, TagIcon, SunriseIcon, FlagIcon, StarIcon, BookIcon, PhoneIcon, ActivityIcon, TabletIcon, ChevronDownIcon, ChevronRightIcon } from "svelte-feather-icons";
 
 	import SavedPages, { addPage } from "../../stores/saved-pages";
 	import PageEntry from "../saved-pages/PageEntry.svelte";
@@ -11,7 +11,7 @@
 	let categories = {
 		users: JSON.parse(sessionStorage.getItem('nav-users') || false),
 		moderation: JSON.parse(sessionStorage.getItem('nav-moderation') || false),
-		servers: JSON.parse(sessionStorage.getItem('nav-servers') || false),
+		games: JSON.parse(sessionStorage.getItem('nav-games') || false),
 		web: JSON.parse(sessionStorage.getItem('nav-web') || false),
 		assets: JSON.parse(sessionStorage.getItem('nav-assets') || false),
 		catalog: JSON.parse(sessionStorage.getItem('nav-catalog') || false)
@@ -92,9 +92,9 @@
 			]
 		},
 		{
-			id: "servers",
-			name: "SERVERS",
-			// icon: ServerIcon,
+			id: "games",
+			name: "GAMES",
+			// icon: MonitorIcon,
 			items: [
 				{
 					name: "Running Game Servers",
@@ -103,10 +103,16 @@
 					permission: "ManageRunningGameServers",
 				},
 				{
-					name: 'RCC Instances',
-					link: '/admin/RCC/manage',
+					name: 'Game Server Status',
+					link: '/admin/game-servers/status',
 					icon: CpuIcon,
-					permission: 'ManageRCCInstances',
+					permission: 'ManageRunningGameServers',
+				},
+				{
+					name: 'Places',
+					link: '/admin/places',
+					icon: MonitorIcon,
+					permission: 'ManageGames',
 				},
 			]
 		},

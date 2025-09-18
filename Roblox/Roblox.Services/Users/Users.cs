@@ -2578,13 +2578,25 @@ public class UsersService : ServiceBase, IService
 		});
 	}
 
-	public async Task GiveUserGameBadge(long userId, long badgeId)
+	public async Task<bool> GiveUserGameBadge(long userId, long badgeId)
 	{
-		await db.ExecuteAsync(
-			@"INSERT INTO public.user_asset (user_id, asset_id, price)
-			  VALUES (:user_id, :asset_id, 0)",
+		var AlreadyAwarded = await db.QuerySingleOrDefaultAsync<bool>(
+			"SELECT EXISTS(SELECT 1 FROM user_asset WHERE user_id = :user_id AND asset_id = :asset_id)",
 			new { user_id = userId, asset_id = badgeId }
 		);
+		
+		if (AlreadyAwarded)
+		{
+			return false;
+		}
+		
+		await db.ExecuteAsync(
+			@"INSERT INTO public.user_asset (user_id, asset_id, price)
+			  VALUES (:user_id, :asset_id, 0)
+			  ON CONFLICT (user_id, asset_id) DO NOTHING",
+			new { user_id = userId, asset_id = badgeId }
+		);
+		return true;
 	}
 
     public bool IsThreadSafe()

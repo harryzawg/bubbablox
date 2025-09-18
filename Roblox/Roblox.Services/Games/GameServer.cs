@@ -615,6 +615,7 @@ public class GameServerService : ServiceBase
 
 		string Start = year switch
 		{
+			// this fucking sucks. make this one function in the future
 			"2018" or "2020" => year == "2020" ? 
 				await StartGameServer2020(placeId, RCCPort, NSPort, jobId, 43200, MaxPlayers) : 
 				await StartGameServer2018(placeId, RCCPort, NSPort, jobId, 43200, MaxPlayers),
@@ -625,19 +626,28 @@ public class GameServerService : ServiceBase
 
 		if (Start != "BAD")
 		{
-			currentGameServerPorts[jobId] = NSPort;
+			currentGameServerPorts.AddOrUpdate(jobId, NSPort, (key, oldValue) => NSPort);
 			return new GameServerGetOrCreateResponse()
 			{
-				job = jobId,
+				//job = jobId,
 				//status = JoinStatus.Joining
 				// wait until server starts and pings
 				status = JoinStatus.Loading
 			};
 		}
 
-		return new GameServerGetOrCreateResponse() 
-		{ 
-			status = JoinStatus.Waiting 
+		if (Start == "BAD")
+		{
+			return new GameServerGetOrCreateResponse()
+			{
+				// status = JoinStatus.Error
+				status = JoinStatus.Waiting
+			};
+		}
+		
+		return new GameServerGetOrCreateResponse()
+		{
+			status = JoinStatus.Waiting
 		};
 	}
 
@@ -1218,6 +1228,7 @@ public class GameServerService : ServiceBase
 	
 	private async Task ModifyServerLua2018(string Script)
 	{
+		// too lazy to add this to the readme
 		try
 		{
 			if (File.Exists(Script))
@@ -1253,6 +1264,7 @@ public class GameServerService : ServiceBase
 			}
 
 			// if it says the port is available, do a double check
+			// does this even work
 			var listener = new TcpListener(IPAddress.Loopback, port);
 			listener.Start();
 			listener.Stop();
@@ -1268,7 +1280,7 @@ public class GameServerService : ServiceBase
 		}
 	}
 	
-	private bool IsPortAvailableTCP(int port)
+/* 	private bool IsPortAvailableTCP(int port)
 	{
 		if (port < 1 || port > 65535)
 			return false;
@@ -1288,10 +1300,11 @@ public class GameServerService : ServiceBase
 		{
 			return false;
 		}
-	}
+	} */
     
 	public static async Task<bool> SendSoapRequestToRcc(string URL, string XML, string SOAPAction, int maxRetries = 3)
 	{
+		// added attempts for 2015/2017 cause it kinda sucks
 		for (int attempt = 1; attempt <= maxRetries; attempt++)
 		{
 			using (HttpClient RccHttpClient = new HttpClient())
@@ -1405,6 +1418,31 @@ public class GameServerService : ServiceBase
 
         }
         */
+		var OldPorts = new List<string>();
+		
+		foreach (var kvp in currentGameServerPorts)
+		{
+			// god why does this fucking game server management suck so much
+			var serverId = kvp.Key;
+			var port = kvp.Value;
+			var Exists = await db.QueryFirstOrDefaultAsync<bool>(
+				"SELECT EXISTS(SELECT 1 FROM asset_server WHERE id = :id::uuid)",
+				new { id = serverId });
+				
+			if (!Exists)
+			{
+				Console.WriteLine($"[info] got old server port for {serverId} (port {port}), will be removed");
+				OldPorts.Add(serverId);
+			}
+		}
+		
+		foreach (var oldServerId in OldPorts)
+		{
+			// remove. fuck you port
+			currentGameServerPorts.TryRemove(oldServerId, out _);
+		}
+		
+		Console.WriteLine($"[info] cleaned up {OldPorts.Count} ports from currentGameServerPorts");
     }
 
     public async Task<IEnumerable<GameServerPlayer>> GetGameServerPlayers(string serverId)

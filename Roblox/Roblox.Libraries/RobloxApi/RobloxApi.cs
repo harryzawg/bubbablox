@@ -394,10 +394,10 @@ public class RobloxApi
 		{
 			Writer.Info(LogGroup.RealRobloxApi, "Roblox asset delivery failed for {0}: {1}. Using gs url", assetId, ex.Message);
 
-			var GSfallback = $"{Configuration.GSUrl}/asset/roblox/?id={assetId}";
+			var GSfallback = $"{Configuration.AssetUrl}/asset/?id={assetId}";
 			var GSResult = await _client.GetAsync(GSfallback);
 			if (!GSResult.IsSuccessStatusCode)
-				throw new Exception($"Fallback endpoint failed for asset {assetId}: {GSResult.StatusCode}");
+				throw new Exception($"fallback endpoint failed for asset {assetId}: {GSResult.StatusCode}");
 
 			return await GSResult.Content.ReadAsStreamAsync();
 		}

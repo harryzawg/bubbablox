@@ -75,9 +75,12 @@
             loading = true;
             errorMsg = undefined;
             const response = await request.get("game-servers/status");
+            
+            console.log("status response:", response);
 
             if (response) {
-                status = response;
+                status = response.data;
+                console.log("status set to:", status);
             } else {
                 status = null;
                 console.warn('bad response:', response);
@@ -162,7 +165,7 @@
                                     <div class="card bg-success text-white text-center">
                                         <div class="card-body p-2">
                                             <h5 class="card-title mb-0">{status.statistics.TotalPlayersInGame}</h5>
-                                            <small>Players Online</small>
+                                            <small>Players in Game</small>
                                         </div>
                                     </div>
                                 </div>
@@ -210,7 +213,6 @@
                                             <th>Uptime</th>
                                             <th>Threads</th>
                                             <th>Status</th>
-                                            <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -265,7 +267,6 @@
                                             <th>Job ID</th>
                                             <th>Port</th>
                                             <th>Players</th>
-                                            <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -317,7 +318,7 @@
                 </div>
                 <div class="row">
                     <div class="col-12">
-                        <h4>Players Online ({status.currentPlayersInGame?.length || 0})</h4>
+                        <h4>Players in Game ({status.currentPlayersInGame?.length || 0})</h4>
                         {#if !status.currentPlayersInGame || status.currentPlayersInGame.length === 0}
                             <div class="alert alert-info">No players currently in game</div>
                         {:else}

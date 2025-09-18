@@ -93,16 +93,7 @@ public class AdminApiController : ControllerBase
     public async Task<IActionResult> GetAdminBundleJsReal()
     {
         if (!IsLoggedIn() || !await IsStaff(userSession.userId)) return Redirect("/home");
-#if DEBUG
-        if (true)
-#else
-        if (adminBundleJs == null)
-#endif
-        {
-            adminStaticMux.WaitOne();
-            adminBundleJs = System.IO.File.ReadAllText(Configuration.AdminBundleDirectory + "/build/bundle.js");
-            adminStaticMux.ReleaseMutex();
-        }
+		adminBundleJs = System.IO.File.ReadAllText(Configuration.AdminBundleDirectory + "/build/bundle.js");
         return Content(adminBundleJs, "application/javascript");
     }
 
@@ -116,16 +107,7 @@ public class AdminApiController : ControllerBase
     public async Task<IActionResult> GetAdminBundleCssReal()
     {
         if (!IsLoggedIn() || !await IsStaff(userSession.userId)) return Redirect("/home");
-#if DEBUG
-        if (true)
-#else
-        if (adminBundleCss == null)
-#endif
-        {
-            adminStaticMux.WaitOne();
-            adminBundleCss = System.IO.File.ReadAllText(Configuration.AdminBundleDirectory + "/build/bundle.css");
-            adminStaticMux.ReleaseMutex();
-        }
+		adminBundleCss = System.IO.File.ReadAllText(Configuration.AdminBundleDirectory + "/build/bundle.css");
         return Content(adminBundleCss, "text/css");
     }
 
@@ -134,13 +116,7 @@ public class AdminApiController : ControllerBase
     public async Task<IActionResult> GetAdminView()
     {
         if (!IsLoggedIn() || !await IsStaff(userSession.userId)) return Redirect("/home");
-        
-       if (adminBundleHtml == null)
-        {
-            adminStaticMux.WaitOne();
-            adminBundleHtml = System.IO.File.ReadAllText(Configuration.AdminBundleDirectory + "/index.html");
-            adminStaticMux.ReleaseMutex();
-        }
+		adminBundleHtml = System.IO.File.ReadAllText(Configuration.AdminBundleDirectory + "/index.html");
         return Content(adminBundleHtml, "text/html");
     }
 
@@ -913,7 +889,7 @@ public class AdminApiController : ControllerBase
 				rap = request.rap,
 				assetId = request.assetId
 			});
-		
+		// Ack gu
 		await db.ExecuteAsync(
 			"INSERT INTO moderation_set_rap (asset_id, actor_id, new_rap) " +
 			"VALUES (:assetId, :actorId, :newRap)",
@@ -928,6 +904,7 @@ public class AdminApiController : ControllerBase
     [HttpPost("asset/moderate-and-delete"), StaffFilter(Access.SetAssetModerationStatus)]
     public async Task ModerateAndDeleteItem([Required, FromBody] ModerateAssetRequest request)
     {
+		// UNCOMMENT AFTER BUNDLES FIXED
         // 30 deletions/hour
         //if (!await services.cooldown.TryIncrementBucketCooldown("DeleteAssetV1_Hour", 30, TimeSpan.FromHours(1)))
             //throw new StaffException("Asset deletion rate limit exceeded (hour). Contact an administrator.");
@@ -980,7 +957,7 @@ public class AdminApiController : ControllerBase
     }
 
 	[HttpPost("gift/open/{assetId:long}/{assetToGive:long}"), StaffFilter(Access.GiveUserItem)]
-	public async Task<dynamic> OpenGiftsByAssetType(long assetId, long assetToGive)
+	public async Task<dynamic> OpenGift(long assetId, long assetToGive)
 	{
 		try
 		{
@@ -3778,7 +3755,7 @@ Thank you for your understanding,
 	private async Task<string> DownloadRobloxAsset(long assetId, string outPath)
 	{
 		//var assetendpoint = $"{Configuration.GSUrl}/asset/roblox/?id={assetId}";
-		var assetendpoint = $"{Configuration.GSUrl}/asset?id={assetId}";
+		var assetendpoint = $"{Configuration.AssetUrl}/asset/?id={assetId}";
 		
 		using var client = new HttpClient();
 		var response = await client.GetAsync(assetendpoint);
@@ -4448,6 +4425,189 @@ Thank you for your understanding,
                 offset,
             });
     }
+	
+	[HttpGet("games/list"), StaffFilter(Access.ManageGames)]
+	public async Task<dynamic> GetGamesList(int limit = 10, int offset = 0, string? query = null)
+	{
+		if (limit is > 100 or < 1) limit = 10;
+
+		var sql = new SqlBuilder();
+		var t = sql.AddTemplate(
+			@"SELECT 
+				  a.id AS placeId,
+				  a.name AS placeName,
+				  a.description,
+				  COALESCE(ap.visit_count, 0) AS visits,
+				  COALESCE(ap.year, 2016) AS year,
+				  COALESCE(asp_counts.currentPlayers, 0) AS currentPlayers,
+				  u.id AS creatorId,
+				  u.username AS creatorName
+			  FROM asset a
+			  INNER JOIN asset_place ap ON a.id = ap.asset_id
+			  LEFT JOIN (
+				  SELECT asset_id, COUNT(user_id) AS currentPlayers
+				  FROM asset_server_player
+				  GROUP BY asset_id
+			  ) asp_counts ON a.id = asp_counts.asset_id
+			  LEFT JOIN ""user"" u ON a.creator_id = u.id
+			  /**where**/
+			  ORDER BY a.id DESC
+			  LIMIT :limit OFFSET :offset",
+			new { limit, offset });
+
+		if (!string.IsNullOrEmpty(query))
+		{
+			sql.Where("(a.name ILIKE :query OR a.description ILIKE :query)", new
+			{
+				query = $"%{query}%"
+			});
+		}
+
+		sql.Where("a.asset_type = :type", new { type = Type.Place });
+
+		var result = await db.QueryAsync(t.RawSql, t.Parameters);
+/* 		if (result.Any())
+		{
+			var item = result.First();
+			Console.WriteLine($"returned: {string.Join(", ", ((IDictionary<string, object>)item).Keys)}");
+		} */
+
+		return result.Select(game => new
+		{
+			placeId = game.placeid,
+			placeName = game.placename,
+			game.description,
+			game.visits,
+			currentPlayers = game.currentplayers,
+			creatorId = game.creatorid,
+			creatorName = game.creatorname,
+			game.year,
+		});
+	}
+
+	[HttpGet("games/{placeId}/details"), StaffFilter(Access.ManageGames)]
+	public async Task<dynamic> GetGameDetails(long placeId)
+	{
+		var Exists = await db.QuerySingleOrDefaultAsync<bool>(
+			"SELECT COUNT(1) FROM asset WHERE id = :placeId",
+			new { placeId });
+		
+		if (!Exists)
+			throw new StaffException("Place not found");
+
+		var result = await db.QuerySingleOrDefaultAsync(
+			@"SELECT 
+				  a.id,
+				  a.name,
+				  a.description,
+				  ap.visit_count as visits,
+				  ap.year as year,
+				  COALESCE(asp_counts.currentPlayers, 0) AS currentPlayers,
+				  u.id as creatorId,
+				  u.username as creatorName
+			  FROM asset a
+			  INNER JOIN asset_place ap ON a.id = ap.asset_id
+			  LEFT JOIN (
+				  SELECT asset_id, COUNT(user_id) AS currentPlayers
+				  FROM asset_server_player
+				  GROUP BY asset_id
+			  ) asp_counts ON a.id = asp_counts.asset_id
+			  LEFT JOIN ""user"" u ON a.creator_id = u.id
+			  WHERE a.id = :placeId",
+			new { placeId });
+
+		if (result == null)
+			throw new StaffException("Place data not found");
+
+		//Console.WriteLine($"returned: {string.Join(", ", ((IDictionary<string, object>)result).Keys)}");
+
+		return new
+		{
+			placeId = result.id,
+			placeName = result.name,
+			description = result.description,
+			visits = result.visits,
+			currentPlayers = result.currentplayers,
+			creatorId = result.creatorid,
+			creatorName = result.creatorname,
+			year = result.year
+		};
+	}
+
+	[HttpPost("games/{placeId}/reset-name"), StaffFilter(Access.ManageGames)]
+	public async Task ResetPlaceName(long placeId)
+	{
+		var Reset = "Place";
+		
+		var affected = await db.ExecuteAsync(
+			"UPDATE asset SET name = :name WHERE id = :placeId AND asset_type = :type",
+			new
+			{
+				name = Reset,
+				placeId,
+				type = Type.Place
+			});
+		
+		if (affected == 0)
+			throw new StaffException("Place not found or not a valid place");
+	}
+
+	[HttpPost("games/{placeId}/reset-description"), StaffFilter(Access.ManageGames)]
+	public async Task ResetPlaceDescription(long placeId)
+	{
+		var affected = await db.ExecuteAsync(
+			"UPDATE asset SET description = :description WHERE id = :placeId AND asset_type = :type",
+			new
+			{
+				description = "No description provided.",
+				placeId,
+				type = Type.Place
+			});
+		
+		if (affected == 0)
+			throw new StaffException("Place not found or not a valid place");
+	}
+
+	[HttpDelete("games/{placeId}/delete"), StaffFilter(Access.ManageGames)]
+	public async Task DeletePlace(long placeId)
+	{
+		var universeInfo = await db.QuerySingleOrDefaultAsync(
+			"SELECT universe_id FROM asset WHERE id = :placeId",
+			new { placeId });
+		
+		if (universeInfo != null && universeInfo.universe_id != null)
+		{
+			await db.ExecuteAsync(
+				"DELETE FROM universe WHERE id = :universeId",
+				new { universeId = universeInfo.universe_id });
+		}
+		
+		var affected = await db.ExecuteAsync(
+			"DELETE FROM asset WHERE id = :placeId AND asset_type = :type",
+			new { placeId, type = Type.Place });
+		
+		if (affected == 0)
+			throw new StaffException("Place not found or not a valid place");
+	}
+
+	[HttpGet("games/{placeId}/download"), StaffFilter(Access.ManageGames)]
+	public async Task<IActionResult> DownloadPlace(long placeId)
+	{
+		var Version = await services.assets.GetLatestAssetVersion(placeId);
+		
+		if (Version.contentUrl == null)
+			throw new StaffException("No content available for this place");
+		
+		var RBXL = Path.Combine(Configuration.AssetDirectory, Version.contentUrl);
+		
+		if (!System.IO.File.Exists(RBXL))
+			throw new StaffException("Place file not found");
+		
+		var placeInfo = await services.assets.GetAssetCatalogInfo(placeId);
+		var File = $"{placeInfo.name.Replace(" ", "_")}_{placeId}.rbxl";
+		
+		return PhysicalFile(RBXL, "application/octet-stream", File);
+	}
 
     [HttpPost("text-moderation/request-payment"), StaffFilter(Access.GetAllAssetComments)]
     public async Task<dynamic> RequestPayment()

@@ -41,6 +41,8 @@ import Applications from "./pages/Applications.svelte";
 import ForumPosts from "./pages/TextModeration.svelte";
 import Groups from "./pages/Groups.svelte";
 import GameHistory from "./pages/GameHistory.svelte";
+import ManagePlace from "./pages/ManagePlace.svelte";
+import Places from "./pages/Places.svelte";
 import Forums from "./pages/Forums.svelte";
 import ManageUserTrades from "./pages/ManageUserTrades.svelte";
 import TrackUserAsset from "./pages/TrackUserAsset.svelte";
@@ -197,6 +199,12 @@ import UploadCustomItem from "./pages/UploadCustomItem.svelte";
 		</Route>
 		<Route path="/admin/game-history">
 			<GameHistory />
+		</Route>
+		<Route path="/admin/places">
+			<Places />
+		</Route>
+		<Route path="/admin/place/:id" let:params>
+			<ManagePlace placeId={params.id} />
 		</Route>
 		<Route path="/admin/forums">
 			<Forums />

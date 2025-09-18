@@ -87,4 +87,5 @@ public enum Access
     ManagePromocodes,
 	ManageRunningGameServers,
 	ManageVerifiedTicks,
+	ManageGames,
 }

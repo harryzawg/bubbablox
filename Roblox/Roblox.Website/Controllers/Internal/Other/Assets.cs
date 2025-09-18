@@ -194,7 +194,7 @@ namespace Roblox.Website.Controllers
 					catch (RecordNotFoundException)
 					{		
 						// i HATE HTTP HEADERS AND PROXIES!!!!!!
-						var pxyurl = $"http://bt.zawg.ca/asset/roblox/?id={assetId}";
+						var pxyurl = $"{Configuration.AssetUrl}/asset/?id={assetId}";
 
 						using var httpClient = new HttpClient();
 						httpClient.Timeout = TimeSpan.FromSeconds(10);
@@ -224,6 +224,7 @@ namespace Roblox.Website.Controllers
 
 								Response.Headers["Content-Type"] = contentType;
 								
+								// Sorry whoever's hosting this 😂
 								await CacheAsset(assetId, content, contentType);
 								return base.File(content, contentType);
 							}

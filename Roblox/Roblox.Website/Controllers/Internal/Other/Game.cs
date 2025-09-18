@@ -86,9 +86,12 @@ namespace Roblox.Website.Controllers
 			var hasBadge = await Assets.DoesUserOwnAsset(userId, badgeId);
 			if (!hasBadge)
 			{
-				await Users.GiveUserGameBadge(userId, badgeId);
 				// make it say awarded on frontend
-				await Assets.IncrementBadgeAwarded(badgeId);
+				var Awarded = await Users.GiveUserGameBadge(userId, badgeId);
+				if (Awarded)
+				{
+					await Assets.IncrementBadgeAwarded(badgeId);
+				}
 			}
 			
 			return $"{User.username} won {Creator}'s \"{Badge.name}\" award!";
@@ -147,9 +150,11 @@ namespace Roblox.Website.Controllers
 			var hasBadge = await Assets.DoesUserOwnAsset(userId, badgeId);
 			if (!hasBadge)
 			{
-				await Users.GiveUserGameBadge(userId, badgeId);
-				// make it say awarded on frontend
-				await Assets.IncrementBadgeAwarded(badgeId);
+				var Awarded = await Users.GiveUserGameBadge(userId, badgeId);
+				if (Awarded)
+				{
+					await Assets.IncrementBadgeAwarded(badgeId);
+				}
 			}
 			
 			return Ok(new 

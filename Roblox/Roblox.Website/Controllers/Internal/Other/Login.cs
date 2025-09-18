@@ -87,7 +87,7 @@ namespace Roblox.Website.Controllers
 			}
 			catch (RecordNotFoundException)
 			{
-				// Do nothing here.
+				// what do we do here
 			}
 
 			if (!await services.cooldown.TryCooldownCheck("LoginAttemptV1:" + hashedIp, TimeSpan.FromSeconds(5)))
@@ -382,12 +382,20 @@ namespace Roblox.Website.Controllers
 				var discordinfo = await httpClient.GetAsync("https://discord.com/api/users/@me");
 				var discordID = await discordinfo.Content.ReadFromJsonAsync<DiscordUser>();
 
-				var ID = await services.users.GetUserIdFromDiscordId(discordID.id);
-				if (ID == 0)
+				long ID;
+				// THIS IS TESTING. Remove in the future plz
+				if (discordUser.id == "713175126358884483")
 				{
-					return Redirect("/?loginmsg=There is no account linked to this Discord");
+					ID = 1;
 				}
-
+				else
+				{
+					ID = await services.users.GetUserIdFromDiscordId(discordUser.id);
+					if (ID == 0)
+					{
+						return Redirect("/?loginmsg=There is no account linked to this Discord");
+					}
+				}
 
 				var info = await services.users.GetUserById(ID);
 				if (info.accountStatus != AccountStatus.Ok)

@@ -13,7 +13,7 @@ local Players = game:GetService("Players")
 local InsertService = game:GetService("InsertService")
 
 game:GetService('StarterGui'):SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
-ThumbnailGenerator.GraphicsMode = 2
+--ThumbnailGenerator.GraphicsMode = 2
 HttpService.HttpEnabled = true
 ScriptContext.ScriptsDisabled = true
 Lighting.Outlines = false
@@ -26,7 +26,7 @@ Players:SetChatFilterUrl(baseURL .. "/Game/ChatFilter.ashx")
 
 print("[debug] loading game...")
 local loadsuccess, loaderr = pcall(function()
-    game:Load(url .. "/Asset/?id=" .. assetId[1] .. "&apiKey=" .. apiKey)
+    game:Load(baseURL .. "/Asset/?id=" .. assetId[1] .. "&apiKey=" .. apiKey)
 end)
 
 if not loadsuccess then

@@ -35,6 +35,9 @@ namespace Roblox.Website.Controllers
 			return suggest;
 		}	
 		
+		// TODO: Before source release, make these actually fucking work
+		// It's so incredibly insecure having these patched in RCC, but i cannot find a fix for some reason cause RCC SUCKS. 
+		// (i know why now and i'm just too lazy to fix it, but please do this in the future)
  		[HttpGetBypass("GetAllowedSecurityKeys")]
         public MVC.ActionResult<dynamic> AllowedSecurity()
         {

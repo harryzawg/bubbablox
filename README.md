@@ -74,9 +74,12 @@ you should change GameServerAuthorization and the Authorization under Render in 
 - download [HxD](https://mh-nexus.de/en/downloads.php?product=HxD20) and drag the RCCService.exe file into it. make sure the domain you are using for this is exactly 10 characters, or it won't work correctly without a workaround (provided below).
 - the reason for this is the way that RCC was compiled, it was set to use Roblox's domain which is 10 characters. just replace it with your 10 char domain (CTRL + R, then do bb.zawg.ca then replace it with your domain. make sure your direction is all)
 - the only thing, is that you should search for ```NS1``` after closing the replace window and pressing ctrl + F and replacing your domain/bb.zawg.ca with roblox.com for each ns. so replace your.domain/bb.zawg.ca in ns1, with roblox.com and so on until ns3. [example](https://zawg.ca/assets/photos/demo1.png)
-- do the same for the client, except the roblox NS patch as it is not needed for the client. change your public key and your private key, everything related to it.
-- you can easily find guides/tools for it. if you do, change the keys in the RSA Folder in Roblox/Roblox.Website.
+- do the same for the client, except the roblox NS patch as it is not needed for the client.
 - also, change the domain in AppSettings.xml to your domain. (for client and RCC)
+
+## RCC/pub/pem
+- you need something like openssl to generate private and public keys.
+- open all the RCCService exe's into HXD
 
 ## the site should be setup at this point!
 - go into ```/services```, run ```runall.bat```, when it's all done go to your site at your domain.

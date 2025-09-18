@@ -186,7 +186,7 @@
 						'ForceApplication',
 						'SetPermissions',
 						'ManageRunningGameServers',
-						'ManageRCCInstances'
+						'ManageGames'
 					];
 					quickConfig(permissions);
 				}}>Owner</button>
@@ -272,7 +272,8 @@
 						'CreateBundleCopiedFromRoblox',
 						'GetSaleHistoryForAsset',
 						'RefundAndDeleteFirstPartyAssetSale',
-						'ForceApplication'
+						'ForceApplication',
+						'ManageGames',
 					];
 					quickConfig(permissions);
 				}}>Administrator</button>
