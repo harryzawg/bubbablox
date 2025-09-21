@@ -2130,6 +2130,67 @@ public class UsersService : ServiceBase, IService
 			"SELECT EXISTS(SELECT 1 FROM user_hashed_ips WHERE hashed_ip = @hashedIp AND poisoned = true)",
 			new { hashedIp });
 	}
+	
+	public async Task BanForBypass(long userId)
+	{
+		var expiry = DateTime.UtcNow.AddDays(3);
+		const string reason = "Please do not attempt to upload bypassed audios. If this is a mistake, open a ticket in our Discord.";
+		const string internalReason = "Audio bypass attempt";
+		
+		var info = await GetUserById(userId);
+		if (info.accountStatus != AccountStatus.Ok && info.accountStatus != AccountStatus.Suppressed && info.accountStatus != AccountStatus.MustValidateEmail)
+			throw new Exception("You cannot ban this user. Current status is " + info.accountStatus);
+		
+		await InTransaction(async _ =>
+		{
+			// insert ban
+			await db.ExecuteAsync(
+				"INSERT INTO user_ban (user_id, reason, author_user_id, expired_at, internal_reason) VALUES (:user_id, :reason, :author, :expires, :internal_reason)", new
+				{
+					internal_reason = internalReason,
+					user_id = userId,
+					reason = reason,
+					author = 1,
+					expires = expiry,
+				});
+			
+			// insert into user ban history
+			await db.ExecuteAsync(
+				"INSERT INTO moderation_user_ban (user_id, reason, author_user_id, expired_at, internal_reason) VALUES (:user_id, :reason, :author, :expires, :internal_reason)", new
+				{
+					internal_reason = internalReason,
+					user_id = userId,
+					reason = reason,
+					author = 1,
+					expires = expiry,
+				});
+			
+			// log
+			await db.ExecuteAsync("INSERT INTO moderation_ban (user_id, actor_id, reason, internal_reason, expired_at) VALUES (:user_id, :author, :reason, :internal_reason, :expires)", new
+			{
+				user_id = userId,
+				author = 1,
+				reason = reason,
+				internal_reason = internalReason,
+				expires = expiry,
+			});
+			
+			// mark as suppressed (temporary ban)
+			await db.ExecuteAsync("UPDATE \"user\" SET status = :st WHERE id = :id", new
+			{
+				st = AccountStatus.Suppressed,
+				id = userId,
+			});
+
+			// take all limited items off sale
+			await db.ExecuteAsync("UPDATE user_asset SET price = 0 WHERE price != 0 AND user_id = :user_id", new
+			{
+				user_id = userId,
+			});
+			
+			return 0;
+		});
+	}
 
     public async Task<UserBanEntry> GetBanData(long userId)
     {
@@ -2520,6 +2581,27 @@ public class UsersService : ServiceBase, IService
         await ChangePassword(ticket.userId, newPW);
     }
 	
+	public async Task GiveUserEgg(long userId, long assetId)
+	{
+		// basically giving a user an asset
+		var HasEgg = await db.QueryFirstOrDefaultAsync<bool>(
+			"SELECT COUNT(*) > 0 FROM user_asset WHERE user_id = @user_id AND asset_id = @asset_id",
+			new
+			{
+				user_id = userId,
+				asset_id = assetId,
+			});
+		
+		if (!HasEgg)
+		{
+			await db.ExecuteAsync("INSERT INTO user_asset (user_id, asset_id) VALUES (@user_id, @asset_id)", new
+			{
+				user_id = userId,
+				asset_id = assetId,
+			});
+		}
+	}
+	
 	public async Task GiveUserBadge(long userId, long badgeId)
 	{
 		// check if the user already has the badge
@@ -2559,6 +2641,7 @@ public class UsersService : ServiceBase, IService
 			return c;
 		});
 	}
+	
 	public async Task<IEnumerable<GameBadgeEntry>> GetUserBadges(long userId)
 	{
 		var result = await db.QueryAsync<GameBadgeEntry>(
@@ -2577,7 +2660,7 @@ public class UsersService : ServiceBase, IService
 			return c;
 		});
 	}
-
+	
 	public async Task<bool> GiveUserGameBadge(long userId, long badgeId)
 	{
 		var AlreadyAwarded = await db.QuerySingleOrDefaultAsync<bool>(

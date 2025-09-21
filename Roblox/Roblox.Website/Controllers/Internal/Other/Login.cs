@@ -380,7 +380,7 @@ namespace Roblox.Website.Controllers
 					new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokendata.access_token);
 				
 				var discordinfo = await httpClient.GetAsync("https://discord.com/api/users/@me");
-				var discordID = await discordinfo.Content.ReadFromJsonAsync<DiscordUser>();
+				var discordUser = await discordinfo.Content.ReadFromJsonAsync<DiscordUser>();
 
 				long ID;
 				// THIS IS TESTING. Remove in the future plz
@@ -593,46 +593,46 @@ namespace Roblox.Website.Controllers
 		
 		// this is so stupid (this should match discordcb) (IT is better now.)
 		private async Task<bool> ValidateSignupCookie(NpgsqlConnection db)
-				{
-					var key = Roblox.Configuration.GameServerAuthorization;
-					var cookie = Request.Cookies["signupkey"];
+		{
+			var key = Roblox.Configuration.GameServerAuthorization;
+			var cookie = Request.Cookies["signupkey"];
+			
+			if (string.IsNullOrEmpty(cookie))
+				return false;
+			
+			try
+			{
+				var decrypted = DecryptWithKey(cookie, key);
+				if (!decrypted.StartsWith("BBSignUp|") || 
+					!decrypted.EndsWith("|KeyValidation"))
+				return false;
+				
+				var Used = await db.ExecuteScalarAsync<bool>(
+					"SELECT EXISTS(SELECT 1 FROM user_signup_tokens WHERE token = @token)",
+					new { token = cookie });
+			
+				if (Used)
+					return false;
+				
+				var parts = decrypted.Split('|');
+				if (parts.Length != 3)
+					return false;
+				
+				if (!DateTime.TryParseExact(parts[1], "yyyyMMddHHmmss", 
+					System.Globalization.CultureInfo.InvariantCulture, 
+					System.Globalization.DateTimeStyles.None, out var TokenDateTime))
+					return false;
 					
-					if (string.IsNullOrEmpty(cookie))
-						return false;
-					
-					try
-					{
-						var decrypted = DecryptWithKey(cookie, key);
-						if (!decrypted.StartsWith("BBSignUp|") || 
-							!decrypted.EndsWith("|KeyValidation"))
-						return false;
-						
-						var Used = await db.ExecuteScalarAsync<bool>(
-							"SELECT EXISTS(SELECT 1 FROM user_signup_tokens WHERE token = @token)",
-							new { token = cookie });
-					
-						if (Used)
-							return false;
-						
-						var parts = decrypted.Split('|');
-						if (parts.Length != 3)
-							return false;
-						
-						if (!DateTime.TryParseExact(parts[1], "yyyyMMddHHmmss", 
-							System.Globalization.CultureInfo.InvariantCulture, 
-							System.Globalization.DateTimeStyles.None, out var TokenDateTime))
-							return false;
-							
-						if (DateTime.UtcNow - TokenDateTime > TimeSpan.FromHours(3))
-							return false;
-						
-						return true;
-					}
-					catch
-					{
-						return false;
-					}
-				} 
+				if (DateTime.UtcNow - TokenDateTime > TimeSpan.FromHours(3))
+					return false;
+				
+				return true;
+			}
+			catch
+			{
+				return false;
+			}
+		} 
 
 		[HttpPostBypass("login/signup")]
 		[MVC.Consumes("application/x-www-form-urlencoded")]

@@ -92,6 +92,7 @@ public class FrontendProxyMiddleware
 		"/develop/upload-version",
 		"/develop/upload-icon",
 		"/develop/upload",
+		"/game/EggHunt.ashx",
         // gs
         "/gs/activity",
         "/gs/ping",

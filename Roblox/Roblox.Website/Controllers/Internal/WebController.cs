@@ -804,6 +804,8 @@ public class WebController : ControllerBase
 					imager = await Imager.ReadAsync(stream);
 					stream.Position = 0;
 				}
+				
+				await CheckForAudios(stream, request.file.FileName, userSession.userId);
 
 				var clothingValidation = await services.assets.ValidateClothing(stream, request.assetType);
 				if (clothingValidation == null)
@@ -837,6 +839,7 @@ public class WebController : ControllerBase
             else if (isImage)
             {
                 var stream = request.file.OpenReadStream();
+				await CheckForAudios(stream, request.file.FileName, userSession.userId);
                 var pictureData = await services.assets.ValidateImage(stream);
                 if (pictureData == null)
                     throw new BadRequestException(0, "Invalid image file");
@@ -1029,5 +1032,47 @@ public class WebController : ControllerBase
             }
         }
     }
-    
+	async Task CheckForAudios(Stream stream, string File, long userId)
+	{
+		stream.Position = 0;
+
+		using var ms = new MemoryStream();
+		await stream.CopyToAsync(ms);
+		ms.Position = 0;
+
+		using var httpClient = new HttpClient();
+		using var content = new MultipartFormDataContent();
+		content.Add(new StreamContent(ms), "file", File);
+
+		var response = await httpClient.PostAsync("http://localhost:3030/validateImage", content);
+
+		stream.Position = 0;
+
+		if (!response.IsSuccessStatusCode)
+		{
+			// if we're here, the py script returned BadRequest so that indicates the image has some audio embedded
+			if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+			{
+				// start a task to ban the yser
+				_ = Task.Run(async () =>
+				{
+					try
+					{
+						var Users = new Roblox.Services.UsersService();
+						await Users.BanForBypass(userId);
+					}
+					catch (Exception ex)
+					{
+						Console.WriteLine("Failed to ban user for audio bypass: {0}", ex.Message);
+					}
+				});
+				// if response bad, throw vague error as well
+				throw new BadRequestException(0, "Image service unavailable");
+			}
+			else
+			{
+				throw new BadRequestException(0, "Image service unavailable");
+			}
+		}
+	}
 }

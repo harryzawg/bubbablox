@@ -224,11 +224,11 @@ public class SessionMiddleware
 				
 				try
 				{
+					// PLEASE save the block status if the ip is the same, the api key gets exhausted like instantly
 					var DecodedRes = DecodeJwt<JwtEntry>(cookie);
 					if (!string.IsNullOrEmpty(DecodedRes.sessionId))
 					{
 						using var users = ServiceProvider.GetOrCreate<UsersService>();
-						using var accountInformation = ServiceProvider.GetOrCreate<AccountInformationService>();
 						
 						UserInfo userInfo;
                         try

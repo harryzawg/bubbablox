@@ -54,7 +54,9 @@ public class ApplicationGuardMiddleware
 		"/game/gamepass/gamepasshandler.ashx",
 		"/game/luawebservice/handlesocialrequest.ashx",
         "/api/moderation/filtertext",
-		"/api/thumbnail"
+		"/api/thumbnail",
+		"/bbmons/usercheck",
+		"/bbmons/login",
         // for forums or they don't work properly
     };
 
@@ -362,7 +364,7 @@ public class ApplicationGuardMiddleware
 			// make it a vague error
             ctx.Response.StatusCode = 500;
             ctx.Response.Headers.ContentType = "text/html; charset=utf-8";
-            await ctx.Response.WriteAsync("InternalServerError");
+            await ctx.Response.WriteAsync("InternalAGMError");
             Roblox.Metrics.ApplicationGuardMetrics.ReportBlockedUserAgent(ua);
             return;
         }

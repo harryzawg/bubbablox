@@ -153,6 +153,40 @@ namespace Roblox.Website.Controllers
 			return Content(content, "text/plain");
 		}
 		
+		[HttpPostBypass("Game/ChatFilter.ashx")]
+		public dynamic ChatFilter()
+		{
+			try
+			{
+				var text = HttpContext.Request.Form["text"].ToString();
+				var userId = HttpContext.Request.Form["userId"].ToString();
+				var placeId = HttpContext.Request.Headers["placeId"].ToString();
+				var gameInstanceId = HttpContext.Request.Headers["gameInstanceID"].ToString();
+
+				// add real filter eventually
+				// var text = Filter(text, userId, placeId);
+				return new
+				{
+					data = new 
+					{
+						white = "Hi gu",
+						black = "Hi gu"
+					}
+				};
+			}
+			catch (Exception ex)
+			{
+				return new
+				{
+					data = new 
+					{
+						white = "#",
+						black = "#"
+					}
+				};
+			}
+		}
+		
 		// Make an actual filter function later
 		[HttpPostBypass("moderation/filtertext")]
         public dynamic GetModerationText()

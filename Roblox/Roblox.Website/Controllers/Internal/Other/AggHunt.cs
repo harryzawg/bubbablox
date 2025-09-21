@@ -11,18 +11,20 @@ using Roblox.Website.Middleware;
 using Roblox.Services.App.FeatureFlags;
 using BadRequestException = Roblox.Exceptions.BadRequestException;
 using MVC = Microsoft.AspNetCore.Mvc;
+using Roblox.Services;
+using HttpGetEgg = Roblox.Website.Controllers.HttpGetBypassAttribute;
 
 namespace Roblox.Website.Controllers 
 {
     [MVC.ApiController]
-    [MVC.Route("/game/EggHunt.ashx")]
-    public class EggHunt : ControllerBase 
+    [MVC.Route("/")]
+    public class EggHunt : ControllerBase
     {
-        private static bool IsTheAggHuntEnably = false;
+        private static bool IsTheAggHuntEnably = true;
 		// Top secret fbi bobux key
         private const string ApiKey = "TopSecretAggHuntKeyDoNOTLEAKPlz";
         
-        [MVC.HttpGet]
+        [HttpGetEgg("game/EggHunt.ashx")]
         public async Task<IActionResult> AggHuntReqrust([FromQuery] long? placeId, [FromQuery] long? playerId, [FromQuery] long? eggId, [FromQuery] bool? toggle, [FromQuery] bool? getStatus, [FromQuery] string apiKey)
         {
             if (apiKey != ApiKey)
@@ -45,12 +47,12 @@ namespace Roblox.Website.Controllers
             {
                 if (!IsTheAggHuntEnably)
                 {
-                    return Ok(new { success = false });
+                    return Ok(new { disabled = true });
                 }
 
                 try
                 {
-                    await GrantAssetToUser(playerId.Value, eggId.Value, placeId.Value);
+                    await GiveEggToUser(playerId.Value, eggId.Value, placeId.Value);
                     
                     return Ok(new { 
                         success = true
@@ -68,14 +70,15 @@ namespace Roblox.Website.Controllers
             return BadRequest("BadRequest");
         }
 
-        private async Task GrantAssetToUser(long userId, long assetId, long placeId)
+        private async Task GiveEggToUser(long userId, long assetId, long placeId)
         {
-			using var Assets = ServiceProvider.GetOrCreate<AssetsService>();
+			using var Assets = Roblox.Services.ServiceProvider.GetOrCreate<AssetsService>();
+			using var Users = Roblox.Services.ServiceProvider.GetOrCreate<UsersService>();
 			
 			bool DoesThisStupidIdiotOwnTheAsset = await Assets.DoesUserOwnAsset(userId, assetId);
 			if (!DoesThisStupidIdiotOwnTheAsset)
 			{
-				await Assets.GrantAssetToUser(userId, assetId);
+				await Users.GiveUserEgg(userId, assetId);
 			}
 		}
     }

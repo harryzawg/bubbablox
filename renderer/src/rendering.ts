@@ -15,17 +15,20 @@ export const doesCallbackExist = (id: string): boolean => {
   return uploadCallbacks[id] !== undefined;
 }
 
+// fuicking hate this it crashes
 export const getUploadCallbacks = () => uploadCallbacks;
 export const registerCallback = (key: string, callback: (args: any) => void) => {
   if (!uploadCallbacks[key]) {
-	uploadCallbacks[key] = [];
+    uploadCallbacks[key] = [];
   }
   uploadCallbacks[key].push(callback);
   return () => {
-	uploadCallbacks[key] = uploadCallbacks[key].filter(cb => cb !== callback);
-	if (uploadCallbacks[key].length === 0) {
-	  delete uploadCallbacks[key];
-	}
+    if (uploadCallbacks[key]) {
+      uploadCallbacks[key] = uploadCallbacks[key].filter(cb => cb !== callback);
+      if (uploadCallbacks[key] && uploadCallbacks[key].length === 0) {
+        delete uploadCallbacks[key];
+      }
+    }
   };
 }
 
@@ -49,7 +52,7 @@ export const getResult = (key: string, upscaleAmount: number): Promise<any | und
     const timeout = setTimeout(() => {
       console.warn(`timeout waiting for key: ${key}, skipping`);
       unregister();
-	  // should we just return like a blocked image or a corrupted image file if this happens?
+	  // should we just return like a blocked image/bad render image if this happens?
       res(undefined);
     }, 2 * 60 * 1000);
 
@@ -77,7 +80,7 @@ export const getResult = (key: string, upscaleAmount: number): Promise<any | und
         res(data);
       } catch (error) {
         console.error("error processing image:", error);
-        res(undefined); // should we just return like a blocked image or a corrupted image file if this happens?
+        res(undefined); // should we just return like a blocked image/bad render image if this happens?
       }
     });
 

@@ -72,6 +72,7 @@ Roblox.Configuration.DiscordLoginRedirect = configuration.GetSection("DiscordLog
 Roblox.Configuration.DiscordKey = configuration.GetSection("DiscordKey").Value;
 Roblox.Configuration.IPSalt = configuration.GetSection("IPSalt").Value;
 Roblox.Configuration.IPHubApiKey = configuration.GetSection("IPHubApiKey").Value;
+Roblox.Configuration.BubbamonsApiKey = configuration.GetSection("BubbamonsApiKey").Value;
 Roblox.Configuration.HCaptchaPublicKey = configuration.GetSection("HCaptcha:Public").Value;
 Roblox.Configuration.HCaptchaPrivateKey = configuration.GetSection("HCaptcha:Private").Value;
 Roblox.Configuration.AllowedNetworkPorts = configuration.GetSection("GameServer:AllowedNetworkPorts").GetChildren().Select(c => int.Parse(c.Value));

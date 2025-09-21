@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="JWT" Version="8.7.0" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="Npgsql" Version="9.0.3" />
     <PackageReference Include="RestSharp" Version="112.1.0" />
     <PackageReference Include="SixLabors.ImageSharp" Version="2.1.3" />

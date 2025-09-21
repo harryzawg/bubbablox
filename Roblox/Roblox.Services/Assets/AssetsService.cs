@@ -277,6 +277,32 @@ public class AssetsService : ServiceBase, IService
 
         return false;
     }
+	
+/* 	public async Task<bool> ValidateGameRBXL(Stream file, Models.Assets.Type assetType)
+    {
+        Writer.Info(LogGroup.AssetValidation, "validating asset. type = {0}", assetType);
+        try
+        {
+            var s = new StreamContent(file);
+            s.Headers.Add("robloxAuthorization", Configuration.AssetValidationServiceAuthorization); {
+			url = Configuration.AssetValidationServiceUrl + "/api/v1/validate-place";
+            var ok = await assetValidationClient.PostAsync(
+                url, s);
+            if (!ok.IsSuccessStatusCode)
+            {
+                throw new Exception("Got bad response from assetValidationService. Code = " + ok.StatusCode);
+            }
+
+            var result = JsonSerializer.Deserialize<AssetValidationResponse>(await ok.Content.ReadAsStringAsync());
+            return result is {isValid: true};
+        }
+        catch (Exception e)
+        {
+            Writer.Info(LogGroup.AssetValidation, "ValidatePlaceRBXL caught exception. message = {0}\n{1}", e.Message, e.StackTrace);
+        }
+
+        return false;
+    } */
 
     public async Task<Imager?> ValidateImage(Stream content)
     {
@@ -1041,20 +1067,23 @@ public class AssetsService : ServiceBase, IService
     public async Task<CreatePlaceResponse> CreatePlace(long creatorId, CreatorType creatorType, long creatorUserId)
     {
         FeatureFlags.FeatureCheck(FeatureFlag.UploadContentEnabled);
-        var basePlateLocation = Configuration.PublicDirectory + "/Baseplate.rbxl";
-        await using var basePlateFile = new FileStream(basePlateLocation, FileMode.Open, FileAccess.Read,
+        var BasePlate = Configuration.PublicDirectory + "/Baseplate.rbxl";
+       await using var BasePlateFile = new FileStream(BasePlate, FileMode.Open, FileAccess.Read,
             FileShare.ReadWrite,
             default, FileOptions.Asynchronous);
-        var place = await CreateAsset("Place", null, creatorUserId, creatorType, creatorId, basePlateFile,
+        var place = await CreateAsset("Place", null, creatorUserId, creatorType, creatorId, BasePlateFile,
             Type.Place, Genre.All, ModerationStatus.ReviewApproved, DateTime.UtcNow, DateTime.UtcNow);
-		var rbxl = Path.Combine(Configuration.RccServicePath, "content", $"{place.assetId}.rbxl");
-		File.Copy(basePlateLocation, rbxl, overwrite: true);
+		if (BasePlateFile.CanSeek)
+		{
+			BasePlateFile.Seek(0, SeekOrigin.Begin);
+		}
+		await CreateAssetVersion(place.assetId, creatorUserId, BasePlateFile);
         return new()
         {
             placeId = place.assetId,
         };
     }
-
+	
     public async Task<ProductEntry> GetProductForAsset(long assetId)
     {
         var result = await db.QuerySingleOrDefaultAsync<ProductEntry>(

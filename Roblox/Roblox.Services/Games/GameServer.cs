@@ -1321,7 +1321,7 @@ public class GameServerService : ServiceBase
 					
 					if (RccHttpClientPost.IsSuccessStatusCode)
 					{
-						Console.WriteLine($"[RCC] SOAP req successful");
+						Console.WriteLine($"[RCC] SOAP res: {RccHttpClientPost.StatusCode} - {RccHttpClientResponse}");
 						return true;
 					}
 					else
@@ -1337,7 +1337,7 @@ public class GameServerService : ServiceBase
 
 					if (attempt == maxRetries)
 					{
-						Console.WriteLine($"[RCC] Could not send a soap request of {SOAPAction} to RCC");
+						Console.WriteLine($"[RCC] could not send soap request {SOAPAction} to RCC");
 						return false;
 					}
 
@@ -1362,8 +1362,8 @@ public class GameServerService : ServiceBase
 				
 				var response = await client.SendAsync(request);
 
-				var responseContent = await response.Content.ReadAsStringAsync();
-				Console.WriteLine($"2018+ SOAP res: {response.StatusCode} - {responseContent}");
+				var resContent = await response.Content.ReadAsStringAsync();
+				Console.WriteLine($"[RCC] 2018+ SOAP res: {response.StatusCode} - {resContent}");
 				
 				return response.IsSuccessStatusCode;
 			}
@@ -1491,14 +1491,153 @@ public class GameServerService : ServiceBase
 		await Task.WhenAll(tasks);
 		return results;
 	}
+	
+	public async Task<string> GetRCCConnection(string serverId)
+	{
+		return await db.QueryFirstOrDefaultAsync<string>(
+			"SELECT RCCConnection FROM asset_server WHERE id = :id::uuid",
+			new { id = serverId });
+	}
+		
+	public async Task<GameServerEntry> GetPlayersCurrentServer(long userId)
+	{
+		return await db.QueryFirstOrDefaultAsync<GameServerEntry>(
+			"SELECT server_id::text as id, asset_id as assetId FROM asset_server_player WHERE user_id = :userId",
+			new { userId });
+	}
+	
+	public async Task EvictPlayer(long userId, long placeId, string year)
+	{
+		try
+		{
+			var CurrentServer = await GetPlayersCurrentServer(userId);
+			if (CurrentServer == null || CurrentServer.assetId != placeId)
+			{
+				Console.WriteLine($"[PlayerEviction] {userId} is not in place {placeId}");
+				return;
+			}
+			var RCCConn = await GetRCCConnection(CurrentServer.id);
 
-    public async Task<IEnumerable<GameServerEntry>> GetGamesUserIsPlaying(long userId)
-    {
-       return await db.QueryAsync<GameServerEntry>(
-            "SELECT s.id::text, s.asset_id as assetId FROM asset_server_player p INNER JOIN asset_server s ON s.id = p.server_id WHERE p.user_id = :id",
-            new
-            {
-                id = userId,
-            });
-    }
+			var RCCparts = RCCConn.Split(':');
+			if (RCCparts.Length != 2 || !int.TryParse(RCCparts[1], out var RCCPort))
+			{
+				Console.WriteLine($"[PlayerEviction] bad RCC conn: {RCCConn}");
+				return;
+			}
+
+			string RCCUrl = $"http://{RCCparts[0]}:{RCCPort}";
+			string Script;
+			string SoapAction;
+
+			if (year == "2018" || year == "2020")
+			{
+				Script = $@"{{
+					""Mode"": ""EvictPlayer"",
+					""MessageVersion"": 1,
+					""Settings"": {{
+						""PlayerId"": {userId}
+					}}
+				}}";
+				SoapAction = "Execute";
+			}
+			else if (year == "2016" || year == "2017" || year == "2015")
+			{
+				Script = $@"for _, Player in pairs(game:GetService(""Players""):GetPlayers()) do if Player.UserId == {userId} then Player:Kick(""You have been disconnected from the game due to joining on another device."") end end";
+				SoapAction = "OpenJobEx";
+			}
+			else
+			{
+				Console.WriteLine($"[PlayerEviction] bad year: {year}");
+				return;
+			}
+				
+			string xml = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+			<soap:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance""
+			   xmlns:xsd=""http://www.w3.org/2001/XMLSchema""
+			   xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
+				<soap:Body>
+					<{SoapAction} xmlns=""http://roblox.com/"">
+						<job>
+							<id>{CurrentServer.id}</id>
+							<expirationInSeconds>60</expirationInSeconds>
+							<category>0</category>
+							<cores>1</cores>
+						</job>
+						<script>
+							<name>GameServer</name>
+							<script>
+								<![CDATA[
+								{Script}
+								]]>
+							</script>
+						</script>
+						<arguments>
+							<LuaValue>
+								<type>LUA_TNIL</type>
+							</LuaValue>
+						</arguments>
+					</{SoapAction}>
+				</soap:Body>
+			</soap:Envelope>";
+			
+			string xml2018 = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+			<soap:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance""
+			   xmlns:xsd=""http://www.w3.org/2001/XMLSchema""
+			   xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
+				<soap:Body>
+					<{SoapAction} xmlns=""http://roblox.com/"">
+						<job>
+							<id>{CurrentServer.id}</id>
+							<expirationInSeconds>60</expirationInSeconds>
+							<category>0</category>
+							<cores>1</cores>
+						</job>
+						<script>
+							<name>GameServer</name>
+							<script>
+								{EscapeXml(Script)}
+							</script>
+						</script>
+						<arguments>
+							<LuaValue>
+								<type>LUA_TNIL</type>
+							</LuaValue>
+						</arguments>
+					</{SoapAction}>
+				</soap:Body>
+			</soap:Envelope>";
+				
+			bool success;
+			if (year == "2018" || year == "2020")
+			{
+				success = await SendSoapRequestToRcc2021(RCCUrl, xml2018, SoapAction);
+			}
+			else
+			{
+				success = await SendSoapRequestToRcc(RCCUrl, xml, SoapAction);
+			}
+
+			if (success)
+			{
+				Console.WriteLine($"[PlayerEviction] kicked player {userId} from server {CurrentServer.id}");
+				CurrentPlayersInGame.Remove(userId);
+				
+				await db.ExecuteAsync(
+					"DELETE FROM asset_server_player WHERE user_id = :user_id AND server_id = :server_id::uuid", 
+					new
+					{
+						server_id = CurrentServer.id,
+						user_id = userId,
+					});
+			}
+			else
+			{
+				Console.WriteLine($"[PlayerEviction] failed to kick player {userId} from server {CurrentServer.id}");
+			}
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"[PlayerEviction] error kicking player {userId}: {ex.Message}");
+		}
+	}
 }

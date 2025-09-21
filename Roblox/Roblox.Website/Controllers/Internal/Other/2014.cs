@@ -115,7 +115,7 @@ local newBadgeUrlEnabled = badgeUrlFlagExists and badgeUrlFlagValue
 
 local url = ""{Configuration.BaseUrl}""
 -- make this not use this in the future very secure
-local apiKey = ""{Configuration.RccAuthorization}""
+local apiKey = ""AckGU""
 local placeId = ""{PlaceID}""
 local access = ""apiKey="" .. apiKey
 

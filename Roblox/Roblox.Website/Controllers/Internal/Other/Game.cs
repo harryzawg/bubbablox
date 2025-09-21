@@ -266,14 +266,13 @@ namespace Roblox.Website.Controllers
 				};
 			}
 			
-			return Result;
-			
-/* 			return new
+			//return Result;
+			return new
 			{
 				jobId = (string?)null,
 				status = (int)Result.status,
 				message = "Waiting for server",
-			}; */
+			};
 		}
 				
 		[HttpGetBypass("/game/Join.ashx")]
@@ -319,6 +318,14 @@ namespace Roblox.Website.Controllers
 				else
 				{
 					return StatusCode(400, "Ticket is required");
+				}
+				
+				var PlayerGS = await services.gameServer.GetPlayersCurrentServer(userId);
+				if (PlayerGS != null && PlayerGS.assetId != placeId)
+				{
+					// Fix this
+					await services.gameServer.EvictPlayer(userId, PlayerGS.assetId, Year);
+					await Task.Delay(300);
 				}
 
 				string ServerId;
