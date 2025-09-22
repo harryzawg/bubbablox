@@ -16,13 +16,11 @@ namespace Roblox.Website.Controllers
 {
     [MVC.ApiController]
     [MVC.Route("/")]
-    public class CharacterEggHunt : ControllerBase 
+    public class Character : ControllerBase 
     {		
  		private async Task<string> FilterOutGears(List<long> assets, long userId)
 		{
 			var filtered = new List<long>();
-			var Admins = new List<long> { 3, 4, 7, 10, 17, 11, 13, 23, 24, 25, 26, 29, 79, 643, 238, 137, 261, 5 };
-			var QA = new List<long> { 23, 4, 29, 144, 45, 421, 153, 34, 139 };
 			foreach (var assetId in assets)
 			{
 				try 
@@ -38,16 +36,6 @@ namespace Roblox.Website.Controllers
 					// if we can't get asset info for some reason, just include it anyway
 					filtered.Add(assetId);
 				}
-			}
-			
-			if (Admins.Contains(userId))
-			{
-				filtered.Add(1234);
-			}
-			
-			if (QA.Contains(userId))
-			{
-				filtered.Add(1235);
 			}
 			return $"{Configuration.BaseUrl}/Asset/BodyColors.ashx?userId={userId};{string.Join(";", filtered.Select(c => Configuration.BaseUrl + "/Asset/?id=" + c))}";
 		}
@@ -225,20 +213,6 @@ namespace Roblox.Website.Controllers
 			{
 				equippedGearVersionIds = new List<long>();
 			} */
-			var Admins = new List<long> { 3, 4, 7, 10, 17, 11, 13, 23, 24, 25, 26, 29, 79, 643, 238, 137, 261, 5 };
-			var QA = new List<long> { 23, 4, 29, 144, 45, 421, 153, 34, 139 };
-
-			if (Admins.Contains(userId))
-			{
-				equippedGearVersionIds.Add(1234);
-				accessoryVersionIds.Add(1234);
-			}
-
-			if (QA.Contains(userId))
-			{
-				equippedGearVersionIds.Add(1235);
-				accessoryVersionIds.Add(1235);
-			}
 			var result = new
 			{
 				resolvedAvatarType = AvatarType,

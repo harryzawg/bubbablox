@@ -1069,9 +1069,14 @@ public class WebController : ControllerBase
 				// if response bad, throw vague error as well
 				throw new BadRequestException(0, "Image service unavailable");
 			}
+			// if we're here, that means the image format or extension is just bad
+			else if (response.StatusCode == System.Net.HttpStatusCode.InternalServerError)
+			{
+				throw new BadRequestException(0, "Invalid image format");
+			}
 			else
 			{
-				throw new BadRequestException(0, "Image service unavailable");
+				throw new BadRequestException(0, "Image validator unavailable, please try again later");
 			}
 		}
 	}

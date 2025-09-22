@@ -1,11 +1,14 @@
 using System;
+using System.Text;
 using System.Collections.Generic;
 using System.Dynamic;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Roblox.Models.Assets;
 using Roblox.Models.Users;
 using Roblox.Libraries.Assets;
@@ -53,16 +56,33 @@ public class WebController2021 : ControllerBase
         
     }
 	
+	private static readonly MemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
+	private static readonly TimeSpan _cacheDur = TimeSpan.FromMinutes(2);
 	// VERY ugly hack but fuck that stupid fuckig remote view it made me wanna kms, this takes a bit longer but most people go to the url from the home which works anyway
 	private async Task<IActionResult> GetPage(string viewName, IEnumerable<dynamic>? arguments = null)
 	{
+		var CacheKey = $"page_{viewName}_{HttpContext.Request.Path}{HttpContext.Request.QueryString}";
+		var ContentTypeCacheKey = $"{CacheKey}_contentType";
+		var EncodingCacheKey = $"{CacheKey}_encoding";
+
+		if (_cache.TryGetValue(CacheKey, out byte[] Cached) && 
+			_cache.TryGetValue(ContentTypeCacheKey, out string CT) &&
+        _cache.TryGetValue(EncodingCacheKey, out string CE))
+		{
+			HttpContext.Response.ContentType = CT;
+			HttpContext.Response.Headers.Remove("Content-Encoding");
+			await Response.Body.WriteAsync(Cached, 0, Cached.Length);
+			return new EmptyResult();
+		}
+		
 		try
 		{
 			using var httpClient = new HttpClient(new HttpClientHandler()
 			{
 				AllowAutoRedirect = false,
 				UseCookies = false,
-				ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
+				ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true,
+				AutomaticDecompression = DecompressionMethods.All
 			})
 			{
 				Timeout = TimeSpan.FromSeconds(30)
@@ -77,11 +97,19 @@ public class WebController2021 : ControllerBase
 
 			foreach (var header in HttpContext.Request.Headers)
 			{
+				if (header.Key.Equals("Accept-Encoding", StringComparison.OrdinalIgnoreCase))
+				{
+					continue;
+				}
+				
 				if (!request.Headers.TryAddWithoutValidation(header.Key, header.Value.ToString()))
 				{
 					request.Content?.Headers.TryAddWithoutValidation(header.Key, header.Value.ToString());
 				}
 			}
+			
+			request.Headers.AcceptEncoding.Clear();
+			request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("identity"));
 
 			// remove bad and ugly headers
 			var stupidanduglyrequestheaders = new[] { "Connection", "Keep-Alive", "Host" };
@@ -126,9 +154,20 @@ public class WebController2021 : ControllerBase
 				}
 			}
 			
-			// hooray it worked
-			await response.Content.CopyToAsync(HttpContext.Response.Body);
+			var RespCT = response.Content.Headers.ContentType?.ToString() ?? "text/html";
+			HttpContext.Response.ContentType = RespCT;
+			var Bytes = await response.Content.ReadAsByteArrayAsync();
 
+			if (response.StatusCode >= System.Net.HttpStatusCode.OK && 
+				response.StatusCode < System.Net.HttpStatusCode.MultipleChoices)
+			{
+				_cache.Set(CacheKey, Bytes, _cacheDur);
+				_cache.Set(ContentTypeCacheKey, RespCT, _cacheDur);
+				_cache.Set(EncodingCacheKey, "identity", _cacheDur);
+			}
+				
+			// hooray it worked
+			await Response.Body.WriteAsync(Bytes, 0, Bytes.Length);
 			return new EmptyResult();
 		}
 		catch (Exception ex)

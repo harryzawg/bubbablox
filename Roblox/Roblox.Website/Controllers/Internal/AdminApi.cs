@@ -1105,13 +1105,13 @@ public class AdminApiController : ControllerBase
     private async Task AwardCommissionForModeration()
     {
         // give commission
-        await services.economy.IncrementCurrency(userSession.userId, CurrencyType.Robux, 25);
+        await services.economy.IncrementCurrency(userSession.userId, CurrencyType.Tickets, 5);
         await services.users.InsertAsync("user_transaction", new
         {
             type = PurchaseType.Commission,
-            currency_type = CurrencyType.Robux,
+            currency_type = CurrencyType.Tickets,
 			// Stupid
-            amount = 0,
+            amount = 5,
             // details
             sub_type = TransactionSubType.StaffAssetModeration,
             // user data
@@ -1123,13 +1123,13 @@ public class AdminApiController : ControllerBase
     private async Task AwardCommissionForApplicationReview()
     {
         // give commission
-        await services.economy.IncrementCurrency(userSession.userId, CurrencyType.Robux, 25);
+        await services.economy.IncrementCurrency(userSession.userId, CurrencyType.Tickets, 5);
         await services.users.InsertAsync("user_transaction", new
         {
             type = PurchaseType.Commission,
             currency_type = CurrencyType.Robux,
 			// fuck you. NOTHING. we don't use apps anymore
-            amount = 0,
+            amount = 5,
             // details
             sub_type = TransactionSubType.StaffApplicationReview,
             // user data
@@ -1455,10 +1455,20 @@ public class AdminApiController : ControllerBase
 	{
 		DateTime? expirationDate = string.IsNullOrWhiteSpace(request.expires) || request.expires == "Poisoned(IP)" || request.expires == "permanent" ? (DateTime?)null : DateTime.Parse(request.expires);
 		var doesExpire = expirationDate != null;
-		if (!string.IsNullOrWhiteSpace(request.expires) && request.expires != "Poisoned(IP)")
+		if (string.IsNullOrWhiteSpace(request.expires) || request.expires == "permanent")
 		{
 			expirationDate = null;
 			doesExpire = false;
+		}
+		else if (request.expires == "Poisoned(IP)")
+		{
+			expirationDate = null;
+			doesExpire = false;
+		}
+		else
+		{
+			expirationDate = DateTime.Parse(request.expires);
+			doesExpire = true;
 		}
 		
 		var info = await services.users.GetUserById(request.userId);

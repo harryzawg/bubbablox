@@ -25,6 +25,7 @@ using Roblox.Website.WebsiteModels.Discord;
 using Npgsql;
 using Dapper;
 using Roblox.Dto.Users;
+using HttpGetBypassUserCheck = Roblox.Website.Controllers.HttpGetBypassAttribute;
 
 // Everything login/signup here
 namespace Roblox.Website.Controllers 
@@ -236,12 +237,12 @@ namespace Roblox.Website.Controllers
 					return Redirect("/forgotpasswordOrUsername?forgotmsg=There is no account linked to this Discord");
 				}
 
-				var resetToken = Guid.NewGuid().ToString();
+				var Token = Guid.NewGuid().ToString();
 				var expiry = DateTime.UtcNow.AddHours(1);
 				
-				await services.users.CreatePasswordResetToken(userId, resetToken, expiry);
+				await services.users.CreatePasswordResetToken(userId, Token, expiry);
 
-				var encryptedToken = EncryptWithKey($"{userId}|{resetToken}|{expiry:o}", Roblox.Configuration.DiscordKey);
+				var encryptedToken = EncryptWithKey($"{userId}|{Token}|{expiry:o}", Roblox.Configuration.DiscordKey);
 				
 				Response.Cookies.Append("resetpasstoken", encryptedToken, new CookieOptions
 				{
@@ -305,8 +306,8 @@ namespace Roblox.Website.Controllers
 					return Redirect("/forgotpasswordOrUsername?forgotmsg=Token has expired, please try again!");
 				}
 
-				var resetToken = parts[1];
-				var isValid = await services.users.ValidatePasswordResetToken(userId, resetToken);
+				var Torken = parts[1];
+				var isValid = await services.users.ValidatePasswordResetToken(userId, Torken);
 				if (!isValid)
 				{
 					Response.Cookies.Delete("resetpasstoken");
@@ -321,7 +322,7 @@ namespace Roblox.Website.Controllers
 
 				await services.users.ChangePassword(userId, newPassword);
 
-				await services.users.DeleteResetPassword(userId, resetToken);
+				await services.users.DeleteResetPassword(userId, Torken);
 				Response.Cookies.Delete("resetpasstoken");
 				Response.Cookies.Delete("resetpasswordverified");
 
@@ -337,12 +338,12 @@ namespace Roblox.Website.Controllers
 		[HttpGetBypass("login-with-discord")]
 		public async Task<MVC.IActionResult> DiscordLoginRedir()
 		{
-			var clientId = Roblox.Configuration.DiscordClientID;
-			var redirecturl = Uri.EscapeDataString(Roblox.Configuration.DiscordLoginRedirect);
+			var ID = Roblox.Configuration.DiscordClientID;
+			var Redirect = Uri.EscapeDataString(Roblox.Configuration.DiscordLoginRedirect);
 			var scope = Uri.EscapeDataString("identify");
 			
 			return new MVC.RedirectResult(
-				$"https://discord.com/api/oauth2/authorize?client_id={clientId}&redirect_uri={redirecturl}&response_type=code&scope={scope}"
+				$"https://discord.com/api/oauth2/authorize?client_id={ID}&redirect_uri={Redirect}&response_type=code&scope={scope}"
 			);
 		}
 		
@@ -433,12 +434,12 @@ namespace Roblox.Website.Controllers
 		[HttpGetBypass("discordverify")]
 		public async Task<MVC.IActionResult> DiscordURL()
 		{
-			var clientId = Roblox.Configuration.DiscordClientID;
-			var redirecturl = Uri.EscapeDataString(Roblox.Configuration.DiscordRedirect);
+			var ID = Roblox.Configuration.DiscordClientID;
+			var Redirect = Uri.EscapeDataString(Roblox.Configuration.DiscordRedirect);
 			var scope = Uri.EscapeDataString("identify");
 			
 			return new MVC.RedirectResult(
-				$"https://discord.com/api/oauth2/authorize?client_id={clientId}&redirect_uri={redirecturl}&response_type=code&scope={scope}"
+				$"https://discord.com/api/oauth2/authorize?client_id={ID}&redirect_uri={Redirect}&response_type=code&scope={scope}"
 			);
 		}
 			
@@ -493,9 +494,11 @@ namespace Roblox.Website.Controllers
 				}
 				
 				// this is so retarded please change this later (this should match validatesignupcookie)
-				var key = Roblox.Configuration.GameServerAuthorization;
+				var key = Roblox.Configuration.DiscordKey;
 				var token = $"BBSignUp|{DateTime.UtcNow:yyyyMMddHHmmss}|KeyValidation";
+				var IDtoken = $"BBSignUp|{userinfo.id}|DiscordId";
 				var encryptedtoken = EncryptWithKey(token, key);
+				var encryptedId = EncryptWithKey(IDtoken, key);
 				
 				HttpContext.Response.Cookies.Append("signupkey", encryptedtoken, new CookieOptions
 				{
@@ -505,7 +508,7 @@ namespace Roblox.Website.Controllers
 					Expires = DateTimeOffset.Now.AddDays(1)
 				});
 
-				HttpContext.Response.Cookies.Append("discord_id", userinfo.id, new CookieOptions
+				HttpContext.Response.Cookies.Append("discord_id", encryptedId, new CookieOptions
 				{
 					HttpOnly = true,
 					Secure = true,
@@ -537,7 +540,7 @@ namespace Roblox.Website.Controllers
 			}
 		}
 		
-		[HttpGet("UserCheck/checkifinvalidusernameforsignup")]
+		[HttpGetBypassUserCheck("UserCheck/checkifinvalidusernameforsignup")]
 		public async Task<MVC.IActionResult> CheckUsernameAvailability([MVC.FromQuery] string username)
 		{
 			// 0 = available
@@ -594,7 +597,7 @@ namespace Roblox.Website.Controllers
 		// this is so stupid (this should match discordcb) (IT is better now.)
 		private async Task<bool> ValidateSignupCookie(NpgsqlConnection db)
 		{
-			var key = Roblox.Configuration.GameServerAuthorization;
+			var key = Roblox.Configuration.DiscordKey;
 			var cookie = Request.Cookies["signupkey"];
 			
 			if (string.IsNullOrEmpty(cookie))
@@ -633,6 +636,33 @@ namespace Roblox.Website.Controllers
 				return false;
 			}
 		} 
+		
+		private string ValidateDiscordKey()
+		{
+			var key = Roblox.Configuration.DiscordKey;
+			var cookie = Request.Cookies["discord_id"];
+			
+			if (string.IsNullOrEmpty(cookie))
+				return null;
+			
+			try
+			{
+				var decrypted = DecryptWithKey(cookie, key);
+				if (!decrypted.StartsWith("BBSignUp|") || 
+					!decrypted.EndsWith("|DiscordId"))
+					return null;
+				
+				var parts = decrypted.Split('|');
+				if (parts.Length != 3)
+					return null;
+				
+				return parts[1];
+			}
+			catch
+			{
+				return null;
+			}
+		}
 
 		[HttpPostBypass("login/signup")]
 		[MVC.Consumes("application/x-www-form-urlencoded")]
@@ -646,23 +676,26 @@ namespace Roblox.Website.Controllers
 			[MVC.FromForm] string context = null,
 			[MVC.FromForm] bool isEligibleForHideAdsAbTest = false)
 		{
+			// error 1 = already signed up with discord id
+			// error 2 = no discord ID in cookies
+			// error 3 = failed to validate signup cookie (bad encryption, expired, already used)
 			if (!await ValidateSignupCookie(db))
 			{
 				return ReturnFormError("Registration is temporarily unavailable. Please try again later.", 
-					new List<string> { "AbuseDetection-ERR" });
+					new List<string> { "AbuseDetection-2" });
 			}
 
-			var DiscordID = Request.Cookies["discord_id"];
+			var DiscordID = ValidateDiscordKey();
 			if (string.IsNullOrEmpty(DiscordID))
 			{
 				return ReturnFormError("Registration is temporarily unavailable. Please try again later.", 
-					new List<string> { "AbuseDetection-IDErr" });
+					new List<string> { "AbuseDetection-3" });
 			}
 
 			if (await services.users.IsDiscordIdUsed(DiscordID))
 			{
 				return ReturnFormError("Registration is temporarily unavailable. Please try again later.", 
-					new List<string> { "AbuseDetection-AlreadyUsed" });
+					new List<string> { "AbuseDetection-1" });
 			}
 			
 			MVC.IActionResult ReturnFormError(string msg, List<string> reasons)

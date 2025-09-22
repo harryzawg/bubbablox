@@ -59,7 +59,7 @@ Images = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".gif")
 @app.post("/validateImage")
 async def ValidateImage(file: UploadFile = File(...)):
     if not file.filename.lower().endswith(Images):
-        raise HTTPException(status_code=400, detail=f"Only these image files are allowed: {', '.join(ALLOWED_EXTENSIONS)}")
+        raise HTTPException(status_code=500, detail=f"Only these image files are allowed: {', '.join(Images)}")
 
     content = await file.read()
     found = False
@@ -75,7 +75,6 @@ async def ValidateImage(file: UploadFile = File(...)):
                 ext = e
                 break
                 
-
         if match:
             FileCount += 1
             end_marker = b"IEND"

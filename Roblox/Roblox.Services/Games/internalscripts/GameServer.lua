@@ -62,8 +62,7 @@ if url then
 	pcall(function() playersService:SetAbuseReportUrl(url .. "/AbuseReport/InGameChatHandler.ashx") end)
 	pcall(function() game:GetService("ScriptInformationProvider"):SetAssetUrl(url .. "/Asset/") end)
 	pcall(function() game:GetService("ContentProvider"):SetBaseUrl(url .. "/") end)
-	--pcall(function() game:GetService("Players"):SetChatFilterUrl(url .. "/Game/ChatFilter.ashx") end)
-	game:GetService("Players"):SetChatFilterUrl(url .. "/Game/ChatFilter.ashx")
+	--game:GetService("Players"):SetChatFilterUrl(url .. "/Game/ChatFilter.ashx")
 	game:GetService("BadgeService"):SetPlaceId(placeId)
 	game:GetService("BadgeService"):SetAwardBadgeUrl(
 		url .. "/Game/Badge/Award.ashx?UserID=%d&BadgeID=%d&PlaceID=%d"

@@ -551,10 +551,10 @@ public class GameServerService : ServiceBase
 			
 			if (!ServerReady)
 			{
-				// if server hasn't pinged yet, return waiting until it has
+				// if server hasn't pinged yet, return Loading until it has
 				return new GameServerGetOrCreateResponse() 
 				{ 
-					status = JoinStatus.Waiting
+					status = JoinStatus.Loading
 				};
 			}
 			
@@ -632,7 +632,7 @@ public class GameServerService : ServiceBase
 				//job = jobId,
 				//status = JoinStatus.Joining
 				// wait until server starts and pings
-				status = JoinStatus.Loading
+				status = JoinStatus.Waiting
 			};
 		}
 
@@ -1251,7 +1251,7 @@ public class GameServerService : ServiceBase
 		{
 			Console.WriteLine($"[INFO] failed to edit ServerStarterScript.lua at {Script}: {ex.Message}");
 		}
-}
+	}
 	
 	private bool IsPortAvailable(int port)
 	{
@@ -1531,19 +1531,22 @@ public class GameServerService : ServiceBase
 
 			if (year == "2018" || year == "2020")
 			{
-				Script = $@"{{
+/* 				Script = $@"{{
 					""Mode"": ""EvictPlayer"",
 					""MessageVersion"": 1,
 					""Settings"": {{
 						""PlayerId"": {userId}
 					}}
 				}}";
+				SoapAction = "Execute"; */
+				Script = $@"for _, Player in pairs(game:GetService(""Players""):GetPlayers()) do if Player.UserId == {userId} then Player:Kick(""You have been disconnected from the game due to joining on another device."") end end";
 				SoapAction = "Execute";
 			}
 			else if (year == "2016" || year == "2017" || year == "2015")
 			{
 				Script = $@"for _, Player in pairs(game:GetService(""Players""):GetPlayers()) do if Player.UserId == {userId} then Player:Kick(""You have been disconnected from the game due to joining on another device."") end end";
-				SoapAction = "OpenJobEx";
+				//SoapAction = "OpenJobEx";
+				SoapAction = "Execute";
 			}
 			else
 			{
