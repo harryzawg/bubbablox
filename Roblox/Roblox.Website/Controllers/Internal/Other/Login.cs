@@ -610,6 +610,7 @@ namespace Roblox.Website.Controllers
 					!decrypted.EndsWith("|KeyValidation"))
 				return false;
 				
+				// check if this has been used before, if so return false as user is trying tos ign up again
 				var Used = await db.ExecuteScalarAsync<bool>(
 					"SELECT EXISTS(SELECT 1 FROM user_signup_tokens WHERE token = @token)",
 					new { token = cookie });
@@ -626,6 +627,7 @@ namespace Roblox.Website.Controllers
 					System.Globalization.DateTimeStyles.None, out var TokenDateTime))
 					return false;
 					
+				// 3 hours to sign up
 				if (DateTime.UtcNow - TokenDateTime > TimeSpan.FromHours(3))
 					return false;
 				
@@ -682,14 +684,14 @@ namespace Roblox.Website.Controllers
 			if (!await ValidateSignupCookie(db))
 			{
 				return ReturnFormError("Registration is temporarily unavailable. Please try again later.", 
-					new List<string> { "AbuseDetection-2" });
+					new List<string> { "AbuseDetection-3" });
 			}
 
 			var DiscordID = ValidateDiscordKey();
 			if (string.IsNullOrEmpty(DiscordID))
 			{
 				return ReturnFormError("Registration is temporarily unavailable. Please try again later.", 
-					new List<string> { "AbuseDetection-3" });
+					new List<string> { "AbuseDetection-2" });
 			}
 
 			if (await services.users.IsDiscordIdUsed(DiscordID))
@@ -827,6 +829,8 @@ namespace Roblox.Website.Controllers
 						Expires = DateTimeOffset.Now.AddYears(1)
 					});
 
+				// should we also encrypt this? not really anything harmful anyone can do with this except like change their username
+				// discord ID is already encrypted so
 				var DiscordProfileJSON = Request.Cookies["discord_profile"];
 				DiscordProfile DihcordProfile = null;
 				string DiscordUsername = "Unknown";

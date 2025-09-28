@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { link } from "svelte-routing";
-	import { HomeIcon, CopyIcon, UsersIcon, UserIcon, UserPlusIcon, GiftIcon, ServerIcon, CpuIcon, MonitorIcon, ImageIcon, DollarSignIcon, BookOpenIcon, EyeIcon, PlusCircleIcon, EditIcon, FilePlusIcon, RefreshCcwIcon, UploadCloudIcon, CheckSquareIcon, TagIcon, SunriseIcon, FlagIcon, StarIcon, BookIcon, PhoneIcon, ActivityIcon, TabletIcon, ChevronDownIcon, ChevronRightIcon } from "svelte-feather-icons";
+	import { HomeIcon, CopyIcon, UsersIcon, UserIcon, UserPlusIcon, GiftIcon, PaperclipIcon, ServerIcon, CpuIcon, MonitorIcon, ImageIcon, DollarSignIcon, BookOpenIcon, EyeIcon, PlusCircleIcon, EditIcon, FilePlusIcon, RefreshCcwIcon, UploadCloudIcon, CheckSquareIcon, TagIcon, SunriseIcon, FlagIcon, StarIcon, BookIcon, PhoneIcon, ActivityIcon, TabletIcon, ChevronDownIcon, ChevronRightIcon } from "svelte-feather-icons";
 
 	import SavedPages, { addPage } from "../../stores/saved-pages";
 	import PageEntry from "../saved-pages/PageEntry.svelte";
@@ -88,6 +88,12 @@
 					link: '/admin/alts',
 					icon: UserIcon,
 					permission: 'GetUsersList',
+				},
+				{
+					name: 'Transcripts',
+					link: '/admin/transcripts',
+					icon: PaperclipIcon,
+					permission: 'GetAdminLogs',
 				},
 			]
 		},

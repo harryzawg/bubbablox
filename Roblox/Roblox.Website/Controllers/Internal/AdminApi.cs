@@ -24,6 +24,7 @@ using Roblox.Dto.Economy;
 using Roblox.Dto.Groups;
 using Roblox.Dto.Staff;
 using Roblox.Dto.Users;
+using Roblox.Dto.Tickets;
 using Roblox.Exceptions;
 using Roblox.Logging;
 using Roblox.Models.AbuseReport;
@@ -2237,6 +2238,66 @@ public class AdminApiController : ControllerBase
         }
 
     }
+	
+	[HttpGet("transcripts/tickets"), StaffFilter(Access.GetAdminLogs)]
+	public async Task<dynamic> GetTranscriptTickets(int limit = 50, int offset = 0)
+	{
+		if (limit is > 500 or < 1) limit = 50;
+
+		var tickets = await db.QueryAsync<TranscriptTicket>(
+			@"SELECT 
+				ticket_id,
+				name,
+				MAX(created_at) as last_message,
+				COUNT(*) as message_count
+			FROM moderation_transcripts
+			GROUP BY ticket_id, name
+			ORDER BY last_message DESC
+			LIMIT :limit OFFSET :offset",
+			new { limit, offset });
+
+		return new
+		{
+			data = tickets,
+			columns = new[]
+			{
+				"Ticket #",
+				"Name",
+				"Last Message Time",
+				"Message Count"
+			}
+		};
+	}
+
+	[HttpGet("transcripts/messages"), StaffFilter(Access.GetAdminLogs)]
+	public async Task<dynamic> GetTranscriptMessages(long ticketId, int limit = 100, int offset = 0)
+	{
+		if (limit is > 500 or < 1) limit = 100;
+
+		var messages = await db.QueryAsync<Transcript>(
+			@"SELECT mt.*, u.username 
+			FROM moderation_transcripts mt
+			LEFT JOIN ""user"" u ON u.id = mt.user_id
+			WHERE mt.ticket_id = :ticketId
+			ORDER BY mt.created_at DESC
+			LIMIT :limit OFFSET :offset",
+			new { ticketId, limit, offset });
+
+		return new
+		{
+			data = messages,
+			columns = new[]
+			{
+				"#",
+				"Ticket ID",
+				"User ID",
+				"Username",
+				"Discord ID",
+				"Message",
+				"Created At"
+			}
+		};
+	}
 
     [HttpGet("getbadges"), StaffFilter(Access.GetUserBadges)]
     public async Task<dynamic> GetUserBadges(long userId)
@@ -2845,11 +2906,30 @@ Thank you for your understanding,
             // insert log
             await InsertProductLog(request.assetId, 1, details.isLimited, details.isLimitedUnique, details.offsaleAt, details.serialCount, details.priceRobux, details.priceTickets, details.isForSale);
         }
+		
+		DateTime? Offsale = null;
 
-        await InsertProductLog(request.assetId, safeUserSession.userId, request.isLimited, request.isLimitedUnique, request.offsaleDeadline, request.maxCopies, request.priceRobux, request.priceTickets, request.isForSale);
+		if (request.offsaleDeadline != null)
+		{
+			var offsetValue = request.offsaleDeadline.value;
+			var offsetUnit = request.offsaleDeadline.unit?.ToLower();
+			
+			Offsale = offsetUnit switch
+			{
+				"seconds" => DateTime.UtcNow.AddSeconds(offsetValue),
+				"minutes" => DateTime.UtcNow.AddMinutes(offsetValue),
+				"hours" => DateTime.UtcNow.AddHours(offsetValue),
+				"days" => DateTime.UtcNow.AddDays(offsetValue),
+				"weeks" => DateTime.UtcNow.AddDays(offsetValue * 7),
+				"months" => DateTime.UtcNow.AddMonths(offsetValue),
+				_ => throw new StaffException("Invalid time unit specified")
+			};
+		}
+
+        await InsertProductLog(request.assetId, safeUserSession.userId, request.isLimited, request.isLimitedUnique, Offsale, request.maxCopies, request.priceRobux, request.priceTickets, request.isForSale);
 
         await services.assets.UpdateAssetMarketInfo(request.assetId, request.isForSale, request.isLimited,
-            request.isLimitedUnique, request.maxCopies, request.offsaleDeadline);
+            request.isLimitedUnique, request.maxCopies, Offsale);
 		await services.assets.UpdateAssetVisibility(request.assetId, request.isVisible);
         await services.assets.SetItemPrice(request.assetId, request.priceRobux, request.priceTickets);
     }
@@ -2905,7 +2985,7 @@ Thank you for your understanding,
 			});
 	}
 
-	[HttpPost("bundle/copy-from-robloxStupidAndSucks"), StaffFilter(Access.CreateBundleCopiedFromRoblox)]
+	[HttpPost("bundle/copy-from-roblox"), StaffFilter(Access.CreateBundleCopiedFromRoblox)]
     public async Task<dynamic> CopyBundle(long bundleId)
     {
         var details = await services.robloxApi.GetBundle(bundleId);
@@ -2959,6 +3039,7 @@ Thank you for your understanding,
             description = details.description,
             genre = Genre.All,
             isForSale = false,
+			isVisible = true,
             isLimited = false,
             isLimitedUnique = false,
             maxCopies = null,
@@ -3432,10 +3513,29 @@ Thank you for your understanding,
 			}
 			services.assets.RenderAsset(assetDetails.assetId, request.assetTypeId);
 		}
+		
+		DateTime? Offsale = null;
+
+		if (request.offsaleDeadline != null)
+		{
+			var offsetValue = request.offsaleDeadline.value;
+			var offsetUnit = request.offsaleDeadline.unit?.ToLower();
+			
+			Offsale = offsetUnit switch
+			{
+				"seconds" => DateTime.UtcNow.AddSeconds(offsetValue),
+				"minutes" => DateTime.UtcNow.AddMinutes(offsetValue),
+				"hours" => DateTime.UtcNow.AddHours(offsetValue),
+				"days" => DateTime.UtcNow.AddDays(offsetValue),
+				"weeks" => DateTime.UtcNow.AddDays(offsetValue * 7),
+				"months" => DateTime.UtcNow.AddMonths(offsetValue),
+				_ => throw new StaffException("Invalid time unit specified")
+			};
+		}
 
 		await services.assets.SetItemPrice(assetDetails.assetId, request.price, null);
 		await services.assets.UpdateAssetVisibility(assetDetails.assetId, request.isVisible);
-		await services.assets.UpdateAssetMarketInfo(assetDetails.assetId, request.isForSale, request.isLimited, request.isLimitedUnique, request.maxCopies, request.offsaleDeadline);
+		await services.assets.UpdateAssetMarketInfo(assetDetails.assetId, request.isForSale, request.isLimited, request.isLimitedUnique, request.maxCopies, Offsale);
 
 		return assetDetails;
 	}

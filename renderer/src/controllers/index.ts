@@ -100,7 +100,7 @@ const axiosClient = axiosStatic.create({
     }
 });
 
-const maxRendersBeforeRestart = 250;
+const maxRendersBeforeRestart = 130;
 
 interface IQueueEntry {
     request: string;

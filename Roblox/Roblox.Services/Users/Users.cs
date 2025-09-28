@@ -23,6 +23,7 @@ using Npgsql;
 using Roblox.Services.DbModels;
 using Roblox.Services.Exceptions;
 using MultiGetEntry = Roblox.Dto.Users.MultiGetEntry;
+using Roblox.Dto.Tickets;
 using Type = Roblox.Models.Assets.Type;
 
 namespace Roblox.Services;
@@ -658,6 +659,43 @@ public class UsersService : ServiceBase, IService
 	{ 
 		var value = enabled ? 1 : 0; 
 		await db.ExecuteAsync( "INSERT INTO user_settings (user_id, \"2020_menu_enabled\") " + "VALUES (@userId, @value) " + "ON CONFLICT (user_id) DO UPDATE SET \"2020_menu_enabled\" = @value", new { userId, value }); 
+	}
+
+	public async Task<UserDiscord> GetUserDataByDiscordId(string ID)
+	{
+		var userId = await GetUserIdFromDiscordId(ID);
+		var userInfo = await GetUserById(userId);
+		var presence = (await MultiGetPresence(new[] { userId })).FirstOrDefault();
+		
+		return new UserDiscord
+		{
+			userId = userId,
+			username = userInfo.username,
+			created = userInfo.created,
+			lastOnline = presence?.lastOnline ?? userInfo.created
+		};
+	}
+	
+	public async Task<long> GetLatestTicket()
+	{
+		var latest = await db.QuerySingleOrDefaultAsync<long?>(
+			"SELECT ticket_id FROM moderation_transcripts ORDER BY ticket_id DESC LIMIT 1");
+		
+		return (latest ?? 0) + 1;
+	}
+	
+	public async Task StoreTranscriptMessage(long ticketId, long userId, string ID, string message, string name)
+	{
+		await InsertAsync("moderation_transcripts", new
+		{
+			ticket_id = ticketId,
+			user_id = userId,
+			discord_id = ID,
+			message = message,
+			name = name,
+			created_at = DateTime.UtcNow,
+			updated_at = DateTime.UtcNow
+		});
 	}
 
     public async Task<StatusEntry> GetUserStatus(long userId)

@@ -5,6 +5,7 @@ import aiohttp
 import os
 import tempfile
 import magic
+from io import BytesIO
 
 app = FastAPI()
 
@@ -32,13 +33,13 @@ async def SendAudioToDiscord(file_path, ext):
             if resp.status not in (200, 204):
                 print(f"Failed to send to Discord: {resp.status}")
 
-def Validate(File):
+def Validate(data: bytes, ext: str) -> bool:
     try:
-        Type = magic.from_file(File, mime=True)
-        if not Type.startswith('audio/'):
+        Type = magic.from_buffer(data, mime=True)
+        if not Type.startswith("audio/"):
             return False
         
-        audio = AudioSegment.from_file(File)
+        audio = AudioSegment.from_file(BytesIO(data), format=ext.replace(".", ""))
         
         if len(audio) <= 0:
             return False
@@ -59,56 +60,29 @@ Images = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".gif")
 @app.post("/validateImage")
 async def ValidateImage(file: UploadFile = File(...)):
     if not file.filename.lower().endswith(Images):
-        raise HTTPException(status_code=500, detail=f"Only these image files are allowed: {', '.join(Images)}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only these image files are allowed: {', '.join(Images)}"
+        )
 
     content = await file.read()
     found = False
-    pos = 0
-    FileCount = 0
 
-    while pos < len(content):
-        match = None
-        ext = None
-        for sig, e in AudioSignatures.items():
-            if content.startswith(sig, pos):
-                match = sig
-                ext = e
-                break
-                
-        if match:
-            FileCount += 1
-            end_marker = b"IEND"
-            end_pos = content.find(end_marker, pos)
-            if end_pos == -1:
-                end_pos = len(content)
-            else:
-                end_pos += len(end_marker)
+    for sig, ext in AudioSignatures.items():
+        idx = content.find(sig)
+        if idx != -1:
+            max_size = 10 * 1024 * 1024
+            chunk = content[idx: idx + max_size]
 
-            chunk = content[pos:end_pos]
-
-            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_file:
-                tmp_file.write(chunk)
-                TempName = tmp_file.name
-                
-            if len(chunk) < 1024:
-                continue
-
-            if Validate(TempName):
+            if Validate(chunk, ext):
                 found = True
-                await SendAudioToDiscord(TempName, ext)
-                os.remove(TempName)
-            else:
-                os.remove(TempName)
+                await SendAudioToDiscord(chunk, ext)
+            break
 
-            pos = end_pos
-        else:
-            pos += 1
+    if found:
+        raise HTTPException(status_code=400, detail="Found audio in image")
 
-        if found:
-            raise HTTPException(status_code=400, detail="Found audio in image")
-            print("found audio")
-
-    return JSONResponse({"status": not found})
+    return JSONResponse({"status": "ok"})
 
 if __name__ == "__main__":
     import uvicorn

@@ -90,7 +90,7 @@ namespace Roblox.Services
             return Task.FromResult<dynamic>(new
             {
                 ClientPort = 0,
-                MachineAddress = "games.zawg.ca",
+                MachineAddress = $"{Configuration.GSIPAddress}",
                 ServerPort = serverPort,
                 DirectServerReturn = true,
                 PingUrl = "",
@@ -139,7 +139,7 @@ namespace Roblox.Services
             return Task.FromResult<dynamic>(new
             {
                 ClientPort = 0,
-                MachineAddress = "games.zawg.ca",
+                MachineAddress = $"{Configuration.GSIPAddress}",
                 ServerPort = serverPort,
                 PingUrl = "",
                 PingInterval = 0,
@@ -179,7 +179,7 @@ namespace Roblox.Services
             return Task.FromResult<dynamic>(new
             {
                 ClientPort = 0,
-                MachineAddress = "games.zawg.ca",
+                MachineAddress = $"{Configuration.GSIPAddress}",
                 ServerPort = serverPort,
                 PingUrl = "",
                 PingInterval = 0,

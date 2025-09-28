@@ -1,6 +1,4 @@
 <script lang="ts">
-	import dayjs from "dayjs";
-
 	import { navigate } from "svelte-routing";
 	import Main from "../components/templates/Main.svelte";
 	import request from "../lib/request";
@@ -14,6 +12,8 @@
         }
     });
 	let assetTypeId = "1";
+	let offsaleOffsetValue = "";
+	let offsaleOffsetUnit = "seconds"; 
 </script>
 
 <svelte:head>
@@ -106,8 +106,22 @@
 					<input type="text" class="form-control" id="max-copies" />
 				</div>
 				<div class="col-6">
-					<label for="description">Offsale Time (EST) (optional)</label>
-					<input type="text" class="form-control" id="offsale-time" placeholder="Format: YYYY-MM-DD HH:MM:SS" />
+					<label for="description">Offsale After (optional)</label>
+					<div class="row">
+						<div class="col-6">
+							<input type="number" class="form-control" id="offsale-offset-value" placeholder="e.g., 30" bind:value={offsaleOffsetValue} />
+						</div>
+						<div class="col-6">
+							<select class="form-control" id="offsale-offset-unit" bind:value={offsaleOffsetUnit}>
+								<option value="seconds">Seconds</option>
+								<option value="minutes">Minutes</option>
+								<option value="hours">Hours</option>
+								<option value="days">Days</option>
+								<option value="weeks">Weeks</option>
+								<option value="months">Months</option>
+							</select>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -127,15 +141,8 @@
 					bodyFormData.append("genre", document.getElementById("assetgenre").value);
 					bodyFormData.append("price", document.getElementById("price").value);
 					bodyFormData.append("isVisible", (document.getElementById("is_visible").checked).toString());
-					let offsaleTime = document.getElementById("offsale-time").value;
-					if (offsaleTime) {
-						const v = dayjs(offsaleTime, "YYYY-MM-DD HH:MM:SS");
-						if (!v.isValid()) {
-							errorMessage = `The offsale time specified is not valid. The format is "YYYY-MM-DD HH:MM:SS"`;
-							return;
-						}
-						bodyFormData.append("offsaleDeadline", v.format());
-					}
+					let offsaleOffsetValue = document.getElementById("offsale-offset-value").value;
+					let offsaleOffsetUnit = document.getElementById("offsale-offset-unit").value;
 					let limStatus = document.getElementById("limited-status").value;
 					if (limStatus === "limited" || limStatus === "limited_u") {
 						bodyFormData.append("isLimited", "true");
@@ -153,6 +160,16 @@
 					}
 					if (assetTypeId === "32") {
 						bodyFormData.append("packageAssetIds", document.getElementById('assetIdsForPackage').value);
+					}
+					if (offsaleOffsetValue) {
+						const offset = parseInt(offsaleOffsetValue);
+						if (isNaN(offset) || offset <= 0) {
+							errorMessage = "Offsale offset must be a positive number";
+							return;
+						}
+
+						bodyFormData.append("offsaleOffsetValue", offset.toString());
+						bodyFormData.append("offsaleOffsetUnit", offsaleOffsetUnit);
 					}
 					disabled = true;
 					request

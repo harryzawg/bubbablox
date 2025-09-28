@@ -67,7 +67,7 @@ namespace Roblox.Website.Controllers
                 }
             }
 
-            return BadRequest("BadRequest");
+            return BadRequest("Something happened idk man");
         }
 
         private async Task GiveEggToUser(long userId, long assetId, long placeId)

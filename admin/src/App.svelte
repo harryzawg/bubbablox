@@ -10,6 +10,8 @@
 	import BanUser from "./pages/BanUser.svelte";
 	import MessageUser from "./pages/MessageUser.svelte";
 	import Logs from "./pages/Logs.svelte";
+	import Transcripts from "./pages/Transcripts.svelte";
+	import Transcript from "./pages/Transcript.svelte";
 	import Memos from "./pages/Memos.svelte";
 	import ManageUserBadges from "./pages/ManageUserBadges.svelte";
 	import ManageUserRobux from "./pages/ManageUserRobux.svelte";
@@ -112,6 +114,12 @@ import UploadCustomItem from "./pages/UploadCustomItem.svelte";
 		</Route>
 		<Route path="/admin/logs">
 			<Logs />
+		</Route>
+		<Route path="/admin/transcripts">
+			<Transcripts />
+		</Route>
+		<Route path="/admin/transcripts/:ticketId" let:params>
+			<Transcript ticketId={params.ticketId} />
 		</Route>
 		<Route path="/admin/alts">
 			<PossibleAlts />

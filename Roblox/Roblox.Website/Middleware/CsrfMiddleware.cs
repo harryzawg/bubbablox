@@ -164,6 +164,7 @@ public class CsrfMiddleware : ControllerServicesExtended
         // hubs
         "/chat",
         "/chat/negotiate",
+		"/users/account-info",
     };
 
 public async Task InvokeAsync(HttpContext ctx)

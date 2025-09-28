@@ -181,70 +181,70 @@ namespace Roblox.Website.Controllers
 #endif
             MultiGetEntry details;
 			try
+			{
+				details = await services.assets.GetAssetCatalogInfo(assetId);
+			}
+			catch (RecordNotFoundException)
+			{
+				try
 				{
-					details = await services.assets.GetAssetCatalogInfo(assetId);
+					var ourId = await services.assets.GetAssetIdFromRobloxAssetId(assetId);
+					assetId = ourId;
 				}
 				catch (RecordNotFoundException)
-				{
+				{		
+					// i HATE HTTP HEADERS AND PROXIES!!!!!!
+					var pxyurl = $"{Configuration.AssetUrl}/asset/?id={assetId}";
+
+					using var httpClient = new HttpClient();
+					httpClient.Timeout = TimeSpan.FromSeconds(10);
+					
 					try
 					{
-						var ourId = await services.assets.GetAssetIdFromRobloxAssetId(assetId);
-						assetId = ourId;
-					}
-					catch (RecordNotFoundException)
-					{		
-						// i HATE HTTP HEADERS AND PROXIES!!!!!!
-						var pxyurl = $"{Configuration.AssetUrl}/asset/?id={assetId}";
-
-						using var httpClient = new HttpClient();
-						httpClient.Timeout = TimeSpan.FromSeconds(10);
+						var stopwatch = Stopwatch.StartNew();
 						
-						try
+						var response = await httpClient.GetAsync(pxyurl, HttpCompletionOption.ResponseHeadersRead);
+						stopwatch.Stop();
+						
+						if (response.IsSuccessStatusCode)
 						{
-							var stopwatch = Stopwatch.StartNew();
-							
-							var response = await httpClient.GetAsync(pxyurl, HttpCompletionOption.ResponseHeadersRead);
-							stopwatch.Stop();
-							
-							if (response.IsSuccessStatusCode)
+							var content = await response.Content.ReadAsByteArrayAsync();
+							var contentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+
+							Response.Headers.Clear();
+
+							// is it necessary to copy all headers except bad ones?
+							foreach (var header in response.Headers)
 							{
-								var content = await response.Content.ReadAsByteArrayAsync();
-								var contentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
-
-								Response.Headers.Clear();
-
-								// is it necessary to copy all headers except bad ones?
-								foreach (var header in response.Headers)
+								if (!isheaderbad(header.Key))
 								{
-									if (!isheaderbad(header.Key))
-									{
-										Response.Headers[header.Key] = header.Value.ToArray();
-									}
+									Response.Headers[header.Key] = header.Value.ToArray();
 								}
+							}
 
-								Response.Headers["Content-Type"] = contentType;
-								
-								// Sorry whoever's hosting this 😂
-								await CacheAsset(assetId, content, contentType);
-								return base.File(content, contentType);
-							}
-							else
-							{
-								throw new RobloxException(400, 0, $"{response.StatusCode}");
-							}
-						}
-						catch (Exception ex)
-						{				
-							if (ex is TaskCanceledException && !ex.Message.Contains("canceled"))
-							{
-								throw new RobloxException(400, 0, "Timeout");
-							}
+							Response.Headers["Content-Type"] = contentType;
 							
-							throw new RobloxException(400, 0, $"{ex.Message}");
+							// Sorry whoever's hosting this 😂
+							await CacheAsset(assetId, content, contentType);
+							return base.File(content, contentType);
+						}
+						else
+						{
+							throw new RobloxException(400, 0, $"{response.StatusCode}");
 						}
 					}
-					details = await services.assets.GetAssetCatalogInfo(assetId);
+					catch (Exception ex)
+					{				
+						if (ex is TaskCanceledException && !ex.Message.Contains("canceled"))
+						{
+							throw new RobloxException(400, 0, "Timeout");
+						}
+						
+						throw new RobloxException(400, 0, $"{ex.Message}");
+					}
 				}
+				details = await services.assets.GetAssetCatalogInfo(assetId);
+			}
 			if (details.is18Plus && !isRcc && !isBotRequest && !is18OrOver)
 				throw new RobloxException(400, 0, "AssetTemporarilyUnavailable");
 			if (details.moderationStatus != ModerationStatus.ReviewApproved && !isRcc && !isBotRequest)

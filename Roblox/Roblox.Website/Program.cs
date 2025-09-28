@@ -41,7 +41,7 @@ builder.Services.AddTransient<NpgsqlConnection>(provider =>
 });
 #if RELEASE
 // Influx DB
-// Roblox.Metrics.RobloxInfluxDb.Configure(configuration.GetSection("InfluxDB:Website:BaseUrl").Value, configuration.GetSection("InfluxDB:Website:Authorization").Value);
+//Roblox.Metrics.RobloxInfluxDb.Configure(configuration.GetSection("InfluxDB:Website:BaseUrl").Value, configuration.GetSection("InfluxDB:Website:Authorization").Value);
 #endif
 // Config
 Roblox.Configuration.CdnBaseUrl = configuration.GetSection("CdnBaseUrl").Value;
@@ -62,6 +62,7 @@ Roblox.Configuration.RccService2020Path = configuration.GetSection("Directories:
 Roblox.Configuration.LuaScriptPath = configuration.GetSection("Directories:LuaScripts").Value;
 Roblox.Configuration.BaseUrl = configuration.GetSection("BaseUrl").Value;
 Roblox.Configuration.AssetUrl = configuration.GetSection("AssetUrl").Value;
+Roblox.Configuration.GSIPAddress = configuration.GetSection("GSIPAddress").Value;
 Roblox.Configuration.Webhook = configuration.GetSection("Webhook").Value;
 Roblox.Configuration.SignupWebhook = configuration.GetSection("SignupWebhook").Value;
 Roblox.Configuration.DiscordClientID = configuration.GetSection("DiscordClientID").Value;
@@ -147,7 +148,9 @@ builder.Services.AddHttpClient("FrontendProxy", client =>
 })
 .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
 builder.Services.AddMemoryCache();
-
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole(); 
+builder.Logging.AddDebug();
 var app = builder.Build();
 
 // god this sucks

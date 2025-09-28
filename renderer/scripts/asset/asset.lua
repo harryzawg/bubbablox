@@ -1,4 +1,4 @@
--- ignore the clothing handling being here, when i first setup the site it was using this script so i made it work
+-- ignore the clothing handling being here, when i first setup the site it was using this script so i made it work cause i was stupid
 local assetId = {1234}
 local jobId = "InsertJobIdHere"
 local mode = "R6"

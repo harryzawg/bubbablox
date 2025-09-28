@@ -1,5 +1,4 @@
 <script lang="ts">
-	import dayjs from "dayjs";
 	import Permission from "../components/Permission.svelte";
 	import Main from "../components/templates/Main.svelte";
 	import { hasPermission } from "../stores/rank";
@@ -13,6 +12,8 @@
 	let queryParams = new URLSearchParams(window.location.search);
 	let assetId: number = parseInt(queryParams.get("assetId"), 10) || undefined;
 	let dirtyAssetId: string = assetId ? assetId.toString() : '';
+	let offsaleOffsetValue = "";
+	let offsaleOffsetUnit = "seconds";
 	
 	interface IDetailsResponse {
 		name: string;
@@ -49,6 +50,9 @@
 						}
 						errorMessage = null;
 						assetDetails = d.data;
+
+						offsaleOffsetValue = "";
+						offsaleOffsetUnit = "seconds";
 					})
 					.finally(() => {
 						disabled = false;
@@ -182,8 +186,22 @@
                                     <input type="text" class="form-control" id="max-copies" value={assetDetails.serialCount || ""} />
                                 </div>
 								<div class="col-6 mt-1 offsale-time-container">
-									<label for="description">Offsale Time (EST) (optional)</label>
-									<input type="text" class="form-control" id="offsale-time" placeholder="Format: YYYY-MM-DD HH:MM:SS" value={(assetDetails.offsaleAt && dayjs(assetDetails.offsaleAt).format("YYYY-MM-DD HH:MM:ss")) || ""} />
+									<label for="description">Offsale After (optional)</label>
+									<div class="row">
+										<div class="col-6">
+											<input type="number" class="form-control" id="offsale-offset-value" placeholder="e.g., 30" bind:value={offsaleOffsetValue} />
+										</div>
+										<div class="col-6">
+											<select class="form-control" id="offsale-offset-unit" bind:value={offsaleOffsetUnit}>
+												<option value="seconds">Seconds</option>
+												<option value="minutes">Minutes</option>
+												<option value="hours">Hours</option>
+												<option value="days">Days</option>
+												<option value="weeks">Weeks</option>
+												<option value="months">Months</option>
+											</select>
+										</div>
+									</div>
 								</div>
 								<div class="col-2 mt-4">
 									<label for="is_visible">Visible: </label>
@@ -206,16 +224,21 @@
                                     if (disabled) {
                                         return;
                                     }
-                                    let offsaleTime = getElementById("offsale-time").value;
-                                    let offsaleDeadline;
-                                    if (offsaleTime) {
-                                        const v = dayjs(offsaleTime, "YYYY-MM-DD HH:MM:SS");
-                                        if (!v.isValid()) {
-                                            errorMessage = `The offsale time specified is not valid. The format is "YYYY-MM-DD HH:MM:SS"`;
-                                            return;
-                                        }
-                                        offsaleDeadline = v.format();
-                                    }
+									let offsaleOffsetValue = getElementById("offsale-offset-value").value;
+									let offsaleOffsetUnit = getElementById("offsale-offset-unit").value;
+									let offsaleDeadline = null;
+									if (offsaleOffsetValue) {
+										const offset = parseInt(offsaleOffsetValue);
+										if (isNaN(offset) || offset <= 0) {
+											errorMessage = "Offsale offset must be a positive number";
+											return;
+										}
+										
+										offsaleDeadline = new {
+											value = offset,
+											unit = offsaleOffsetUnit
+										};
+									}
 
                                     let isLimited = false;
                                     let isLimitedUnique = false;
@@ -254,18 +277,18 @@
 									const isVisible = getElementById("is_visible").checked;
                                     
                                     disabled = true;
-                                    request
-                                        .patch("/asset/product", {
-                                            assetId,
-                                            isForSale: getElementById("is_for_sale").checked,
-                                            maxCopies: maxSerial,
-                                            priceRobux: price,
-                                            priceTickets: priceTickets,
-                                            offsaleDeadline,
-                                            isLimited,
-                                            isLimitedUnique,
+									request
+										.patch("/asset/product", {
+											assetId,
+											isForSale: getElementById("is_for_sale").checked,
+											maxCopies: maxSerial,
+											priceRobux: price,
+											priceTickets: priceTickets,
+											offsaleDeadline,
+											isLimited,
+											isLimitedUnique,
 											isVisible
-                                        })
+										})
                                         .then((d) => {
                                             window.location.href = `/catalog/${assetId}/--`;
                                         })

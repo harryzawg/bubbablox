@@ -236,7 +236,7 @@ namespace Roblox.Website.Controllers
         {
             FeatureFlags.FeatureCheck(FeatureFlag.FriendingEnabled);
             if (safeUserSession.userId == userIdToRequest)
-                throw new BadRequestException(7, "The user cannot be friends with itself");
+                throw new BadRequestException(7, "The user cannot be friends with themself");
             await services.friends.RequestFriendship(safeUserSession.userId, userIdToRequest);
             
             return new
@@ -437,25 +437,16 @@ namespace Roblox.Website.Controllers
         {
 
             var roles = new string[] { };
-            if (userSession == null)
-            {
-                HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
-                return new
-                {
-                    success = false,
-                    message = "Unauthorized"
-                };
-            }
-            var userBalance = await services.economy.GetUserBalance(userSession.userId);
+            //var userBalance = await services.economy.GetUserBalance(safeUserSession.userId);
             var jsonData = new
             {
-                UserId =  userSession.userId,
-                Username = userSession.username,
-                DisplayName = userSession.username,
+                UserId = 10,
+                Username = "harry",
+                DisplayName = "harry",
                 HasPasswordSet = true,
                 Email = "Higu@higu.ca",
                 MembershipType = 3,
-                RobuxBalance = userBalance.robux,
+                RobuxBalance = 15,
                 AgeBracket = 0,
                 Roles = roles,
                 EmailNotificationEnabled = false,
@@ -562,10 +553,9 @@ namespace Roblox.Website.Controllers
         {
             long placeId = long.Parse(Request.Headers["roblox-place-id"].ToString());
             bool canManagePlace = await services.assets.CanUserModifyItem(placeId, userId);
-            bool isOwner =  StaffFilter.IsOwner(userId);
             return new 
             {
-                isAdminDeveloperConsoleEnabled = (canManagePlace || isOwner)
+                isAdminDeveloperConsoleEnabled = (canManagePlace)
             };
         }
 		

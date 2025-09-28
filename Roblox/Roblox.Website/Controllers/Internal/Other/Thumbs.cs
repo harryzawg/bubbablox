@@ -153,7 +153,6 @@ namespace Roblox.Website.Controllers
 			return new MVC.RedirectResult(imageUrl, false);
 		}
 
-        //avatar stuff
         [HttpGetBypass("avatar-thumbnail/image")]
         public async Task<MVC.RedirectResult> GetAvatarThumbnail(long userId, string? username)
         {
@@ -215,7 +214,6 @@ namespace Roblox.Website.Controllers
 			return new RedirectResult(result[0].imageUrl ?? "/img/placeholder.png", false);
 		}
 
-        //place icon
         [HttpGetBypass("Thumbs/PlaceIcon.ashx")]
         [HttpGetBypass("Thumbs/GameIcon.ashx")]
         public async Task<MVC.RedirectResult> GetGameIcon(long assetId)
@@ -223,7 +221,6 @@ namespace Roblox.Website.Controllers
             return await GetThumbnailUrl(assetId, ThumbnailType.PlaceIcon);
         }
 
-        //asset icon stuff
         [HttpGet("asset-thumbnail/image")]
         [HttpGetBypass("Game/Tools/ThumbnailAsset.ashx")]
         public async Task<MVC.RedirectResult> GetAssetThumbnail(long assetId, long? aid)
@@ -251,8 +248,7 @@ namespace Roblox.Website.Controllers
 				return new RedirectResult("/img/placeholder.png", false);
 			return new RedirectResult(result[0].imageUrl ?? "/img/placeholder.png", false);
 		}
-
-        //all json thumbnail apis
+		
         [HttpGetBypass("avatar-thumbnail/json")]
         public async Task<dynamic> GetAvatarThumbnailJson([Required] long userId)
         {
@@ -465,7 +461,7 @@ namespace Roblox.Website.Controllers
 						{
 							foreach (var item in result)
 							{
-								Console.WriteLine($"[BatchThumbnails] Result: {JsonConvert.SerializeObject(item)}");
+								Console.WriteLine($"[BatchThumbnails] res: {JsonConvert.SerializeObject(item)}");
 							}
 						}
 					}
@@ -478,73 +474,17 @@ namespace Roblox.Website.Controllers
 				catch (Exception taskEx)
 				{
 					stopwatch.Stop();
-					Console.WriteLine($"[BatchThumbnails] Task execution failed after {stopwatch.ElapsedMilliseconds}ms: {taskEx.Message}");
-					Console.WriteLine($"[BatchThumbnails] StackTrace: {taskEx.StackTrace}");
+					Console.WriteLine($"[BatchThumbnails] batch exec failed after {stopwatch.ElapsedMilliseconds}ms: {taskEx.Message}");
+					Console.WriteLine($"[BatchThumbnails] trace: {taskEx.StackTrace}");
 					throw;
 				}
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine($"[BatchThumbnails] Overall processing failed: {ex.Message}");
-				Console.WriteLine($"[BatchThumbnails] StackTrace: {ex.StackTrace}");
+				Console.WriteLine($"[BatchThumbnails] somethimg failed: {ex.Message}");
+				Console.WriteLine($"[BatchThumbnails] trace: {ex.StackTrace}");
 				throw;
 			}
 		}
-
-/*         [HttpPostBypass("v1/batch")]
-        public async Task<dynamic> BatchThumbnailsRequest()
-        {
-            bool isGzip = Request.Headers["Content-Encoding"].ToString() == "gzip";
-            IEnumerable<BatchRequestEntry> requestEntries;
-            var tasks = new List<Task<IEnumerable<dynamic>>>();
-            Console.WriteLine(isGzip);
-            if (isGzip)
-            {
-                using (var decompressedStream = new MemoryStream())
-                {
-                    using (var requestStream = Request.Body)
-                    {
-                        using (var gzipStream = new GZipStream(requestStream, CompressionMode.Decompress))
-                        {
-                            await gzipStream.CopyToAsync(decompressedStream);
-                        }
-                    }
-                    decompressedStream.Seek(0, SeekOrigin.Begin);
-
-                    using (var reader = new StreamReader(decompressedStream, Encoding.UTF8))
-                    {
-                        var json = await reader.ReadToEndAsync();
-                        Console.WriteLine(json);
-                        requestEntries = JsonConvert.DeserializeObject<IEnumerable<BatchRequestEntry>>(json);
-                    }
-                }
-            }
-            else
-            {
-                using (var reader = new StreamReader(Request.Body, Encoding.UTF8))
-                {
-                    var json = await reader.ReadToEndAsync();
-                    Console.WriteLine(json);
-                    requestEntries = JsonConvert.DeserializeObject<IEnumerable<BatchRequestEntry>>(json);
-                }
-            }
-
-            var thumbs = requestEntries.ToList();
-            var allResults = await Task.WhenAll(new List<Task<IEnumerable<dynamic>>>()
-            {
-                MultiGetThumbnailsGeneric(thumbs, "Avatar", services.thumbnails.GetUserThumbnails),
-                MultiGetThumbnailsGeneric(thumbs, "AvatarThumbnail", services.thumbnails.GetUserThumbnails),
-                MultiGetThumbnailsGeneric(thumbs, "AvatarHeadShot", services.thumbnails.GetUserHeadshots),
-                MultiGetThumbnailsGeneric(thumbs, "GameIcon", services.thumbnails.GetGameIcons),
-                MultiGetThumbnailsGeneric(thumbs, "GameThumbnail", services.thumbnails.GetAssetThumbnails),
-                MultiGetThumbnailsGeneric(thumbs, "Asset", services.thumbnails.GetAssetThumbnails),
-                MultiGetThumbnailsGeneric(thumbs, "AssetThumbnail", services.thumbnails.GetAssetThumbnails),
-                MultiGetThumbnailsGeneric(thumbs, "GroupIcon", services.thumbnails.GetGroupIcons),
-            });
-            return new RobloxCollection<dynamic>()
-            {
-                data = allResults.SelectMany(x => x),
-            };
-        } */
 	}
 }	

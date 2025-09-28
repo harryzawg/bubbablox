@@ -133,6 +133,12 @@ public class ReRenderRequest
     public long assetId { get; set; }
 }
 
+public class TimeOffset
+{
+    public int value { get; set; }
+    public string unit { get; set; } = "seconds";
+}
+
 public class UpdateProductRequest
 {
     public long assetId { get; set; }
@@ -143,7 +149,7 @@ public class UpdateProductRequest
     public int? priceRobux { get; set; }
     public int? priceTickets { get; set; }
     public int? maxCopies { get; set; }
-    public DateTime? offsaleDeadline { get; set; }
+    public TimeOffset? offsaleDeadline { get; set; }
 }
 
 public class UpdateNameRequest
@@ -167,7 +173,7 @@ public class CreateAssetRequest
     public bool isLimitedUnique { get; set; }
     public int? price { get; set; }
     public int? maxCopies { get; set; }
-    public DateTime? offsaleDeadline { get; set; }
+    public TimeOffset? offsaleDeadline { get; set; }
     public long? robloxAssetId { get; set; }
     public IFormFile? rbxm { get; set; }
     public string? packageAssetIds { get; set; }

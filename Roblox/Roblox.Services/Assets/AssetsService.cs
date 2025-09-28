@@ -1,8 +1,10 @@
+using System;
 using System.Diagnostics;
 using System.Dynamic;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text;
+using System.Xml;
 using System.Text.RegularExpressions;
 using Dapper;
 using FFMpegCore;
@@ -463,6 +465,102 @@ public class AssetsService : ServiceBase, IService
 
         return AudioValidation.UnsupportedFormat;
     }
+	
+	#region RCC shit
+	
+	// this is really fucking stupid! make this do something else for the love of jongus.
+	private static Process? rccProcess;
+	private static int? rccPort;
+	private static object rccLock { get; } = new();
+	private static Random random = new Random();
+	
+	private static readonly HttpClient httpClient = new()
+	{
+		Timeout = TimeSpan.FromMinutes(1)
+	};
+	
+	private static int GetRandomPortRCC2020()
+	{
+		lock (rccLock)
+		{
+			int port;
+			bool available;
+
+			do
+			{
+				port = random.Next(20000, 40000);
+				// fix this
+				available = true;
+			} while (!available);
+
+			return port;
+		}
+	}
+	
+	private static async Task<int> StartRccService()
+	{
+		lock (rccLock)
+		{
+			if (rccProcess != null && !rccProcess.HasExited && rccPort.HasValue)
+				return rccPort.Value;
+
+			rccPort = GetRandomPortRCC2020();
+
+			var rccPath = Path.Combine(Configuration.RccService2020Path, "RCCService.exe");
+			if (string.IsNullOrEmpty(rccPath) || !File.Exists(rccPath))
+				throw new Exception("RCC 2020 path not configured or RCC exe doesn't exist");
+
+			var processStartInfo = new ProcessStartInfo
+			{
+				FileName = rccPath,
+				Arguments = $"-console -verbose -port {rccPort.Value}",
+				UseShellExecute = true,
+				CreateNoWindow = false
+			};
+
+			rccProcess = new Process { StartInfo = processStartInfo };
+
+			if (!rccProcess.Start())
+				throw new Exception("Failed to start RCC 2020 process");
+
+			return rccPort.Value;
+		}
+	}
+
+	private static async Task<string> SendSoapRequest(int port, string soapAction, string xmlBody)
+	{
+		var url = $"http://localhost:{port}";
+		using var request = new HttpRequestMessage(HttpMethod.Post, url);
+		request.Headers.Add("SOAPAction", soapAction);
+		request.Content = new StringContent(xmlBody, Encoding.UTF8, "text/xml");
+
+		var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+		response.EnsureSuccessStatusCode();
+
+		return await response.Content.ReadAsStringAsync();
+	}
+
+	private static async Task SendCloseJobRequest(int port, string jobId)
+	{
+		var XML = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
+		<SOAP-ENV:Envelope xmlns:SOAP-ENV=""http://schemas.xmlsoap.org/soap/envelope/"" 
+						   xmlns:SOAP-ENC=""http://schemas.xmlsoap.org/soap/encoding/"" 
+						   xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" 
+						   xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" 
+						   xmlns:ns2=""http://roblox.com/RCCServiceSoap"" 
+						   xmlns:ns1=""http://roblox.com/"" 
+						   xmlns:ns3=""http://roblox.com/RCCServiceSoap12"">
+			<SOAP-ENV:Body>
+				<ns1:CloseJob>
+					<ns1:jobID>{jobId}</ns1:jobID>
+				</ns1:CloseJob>
+			</SOAP-ENV:Body>
+		</SOAP-ENV:Envelope>";
+
+		await SendSoapRequest(port, "http://roblox.com/CloseJob", XML);
+	}
+	
+	#endregion
 
     #region RenderMethods
 
@@ -474,53 +572,115 @@ public class AssetsService : ServiceBase, IService
         await InsertOrReplaceThumbnail(assetId, latestVersion.assetVersionId, key, ModerationStatus.ReviewApproved);
     }
     
-    private async Task CreatePackageThumbnail(long assetId, CancellationToken? cancellationToken = null)
-    {
-        var latestVersion = await GetLatestAssetVersion(assetId);
-        var assets = await MultiGetAssetDeveloperDetails(await GetPackageAssets(assetId));
-        var renderAssets = assets.Select(c => new AvatarAssetEntry()
-        {
-            id = c.assetId,
-            assetType = new AvatarAssetTypeEntry()
-            {
-                id = c.typeId,
-            }
-        }).ToList();
-        renderAssets.Add(new AvatarAssetEntry()
-        {
-            id = Configuration.PackageShirtAssetId,
-            assetType = new AvatarAssetTypeEntry()
-            {
-                id = (int)Type.Shirt,
-            },
-        });
-        renderAssets.Add(new AvatarAssetEntry()
-        {
-            id = Configuration.PackagePantsAssetId,
-            assetType = new AvatarAssetTypeEntry()
-            {
-                id = (int)Type.Pants,
-            },
-        });
-        var response = await Rendering.CommandHandler.RequestPlayerThumbnail(new()
-        {
-            userId = assetId,
-            playerAvatarType = "R6",
-            assets = renderAssets,
-            bodyColors = new AvatarBodyColors()
-            {
-                headColorId = 1001,
-                torsoColorId = 1001,
-                leftArmColorId = 1001,
-                rightArmColorId = 1001,
-                leftLegColorId = 1001,
-                rightLegColorId = 1001,
-            },
-        }, cancellationToken);
-        var key = await UploadAssetContent(response, Configuration.ThumbnailsDirectory, "png");
-        await InsertOrReplaceThumbnail(assetId, latestVersion.assetVersionId, key,
-            ModerationStatus.AwaitingApproval);
-    }
+	private async Task CreatePackageThumbnail(long assetId, CancellationToken? cancellationToken = null)
+	{
+		var latestVersion = await GetLatestAssetVersion(assetId);
+		var packageAssets = await GetPackageAssets(assetId);
+		
+		var assets = new List<string>();
+		foreach (var asset in packageAssets)
+		{
+			assets.Add($"{asset}");
+		}
+		
+		assets.Add($"{Configuration.PackageShirtAssetId}");
+		assets.Add($"{Configuration.PackagePantsAssetId}");
+		var charApp = $"{Configuration.BaseUrl}/v1.1/avatar-fetch?placeId=0&userId=0";
+
+		var port = await StartRccService();
+		var jobId = Guid.NewGuid().ToString();
+
+		var Json = new
+		{
+			Mode = "Thumbnail",
+			Settings = new
+			{
+				Type = "Avatar_R15_Action_Package",
+				Arguments = new object[]
+				{
+					Configuration.BaseUrl,
+					charApp,
+					"Png",
+					840,
+					840,
+					assets.ToArray()
+				}
+			}
+		};
+
+		var serializedJson = JsonSerializer.Serialize(Json);
+
+		var XML = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+		<soap:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance""
+		   xmlns:xsd=""http://www.w3.org/2001/XMLSchema""
+		   xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
+			<soap:Body>
+				<OpenJob xmlns=""http://roblox.com/"">
+					<job>
+						<id>{jobId}</id>
+						<expirationInSeconds>60</expirationInSeconds>
+						<category>0</category>
+						<cores>1</cores>
+					</job>
+					<script>
+						<name>GameServer</name>
+						<script>{serializedJson}</script>
+					</script>
+					<arguments>
+						<LuaValue>
+							<type>LUA_TNIL</type>
+						</LuaValue>
+					</arguments>
+				</OpenJob>
+			</soap:Body>
+		</soap:Envelope>";
+
+		try
+		{
+			var res = await SendSoapRequest(port, "http://roblox.com/OpenJob", XML);
+			
+			var xmlDoc = new XmlDocument();
+			xmlDoc.LoadXml(res);
+			
+			var NSManager = new XmlNamespaceManager(xmlDoc.NameTable);
+			NSManager.AddNamespace("soap", "http://schemas.xmlsoap.org/soap/envelope/");
+			NSManager.AddNamespace("ns1", "http://roblox.com/");
+			
+			var resNodes = xmlDoc.SelectNodes("//soap:Envelope/soap:Body/ns1:OpenJobResponse/ns1:OpenJobResult", NSManager);
+			
+			foreach (XmlNode resultNode in resNodes)
+			{
+				var typeNode = resultNode.SelectSingleNode("ns1:type", NSManager);
+				var valueNode = resultNode.SelectSingleNode("ns1:value", NSManager);
+				
+				if (typeNode != null && valueNode != null && 
+					typeNode.InnerText == "LUA_TSTRING" && 
+					!string.IsNullOrEmpty(valueNode.InnerText))
+				{
+					try
+					{
+						var Bytes = Convert.FromBase64String(valueNode.InnerText);
+						await SendCloseJobRequest(port, jobId);
+						var key = await UploadAssetContent(new MemoryStream(Bytes), Configuration.ThumbnailsDirectory, "png");
+						await InsertOrReplaceThumbnail(assetId, latestVersion.assetVersionId, key,
+							ModerationStatus.AwaitingApproval);
+						return;
+					}
+					catch (FormatException)
+					{
+						continue;
+					}
+				}
+			}
+			
+			throw new Exception("No b64 data found in RCC res for PACKAGE.");
+		}
+		catch (Exception ex)
+		{
+			Writer.Info(LogGroup.AssetRender, "Package thumb render failed for asset {0}: {1}", assetId, ex.Message);
+			throw;
+		}
+	}
 
     private async Task CreateAssetThumbnail(long assetId, CancellationToken? cancellationToken = null)
     {
@@ -664,78 +824,121 @@ public class AssetsService : ServiceBase, IService
 		await InsertOrReplaceThumbnail(assetId, latestVersion.assetVersionId, key, ModerationStatus.AwaitingApproval);
 	}
 
-    private async Task CreateBodyPartThumbnail(long assetId, Models.Assets.Type assetType, CancellationToken? cancellationToken = null)
-    {
-        // get the clothing id, which is mainly why we need a whole serperate function
-        // TODO: Maybe make this one function in CreateClothingThumbnail?
+	private async Task CreateBodyPartThumbnail(long assetId, Models.Assets.Type assetType, CancellationToken? cancellationToken = null)
+	{
+		var latestVersion = await GetLatestAssetVersion(assetId);
 
-        var clothingId = (long) 0; // this has to be here so shit doesn't complain
-        var modelThing = Models.Assets.Type.Torso; // TODO: Do we really need this?
-        // start setting up the values
+		var clothingId = assetType switch
+		{
+			Models.Assets.Type.Torso => Roblox.Configuration.PackageTorsoAssetId,
+			Models.Assets.Type.LeftArm => Roblox.Configuration.PackageLeftArmAssetId,
+			Models.Assets.Type.RightArm => Roblox.Configuration.PackageRightArmAssetId,
+			Models.Assets.Type.LeftLeg => Roblox.Configuration.PackageLeftLegAssetId,
+			Models.Assets.Type.RightLeg => Roblox.Configuration.PackageRightLegAssetId,
+			_ => throw new ArgumentException("Bad asset type for body part thumb")
+		};
 
-        if (Models.Assets.Type.Torso == assetType) {
-            modelThing = Models.Assets.Type.Torso;
-            clothingId = Roblox.Configuration.PackageTorsoAssetId;
-        }
+		var assets = new List<long>
+		{
+			assetId,
+			clothingId
+		};
 
-        if (Models.Assets.Type.LeftArm == assetType) {
-            modelThing = Models.Assets.Type.LeftArm;
-            clothingId = Roblox.Configuration.PackageLeftArmAssetId;
-        }
+		var charApp = $"{Configuration.BaseUrl}/v1.1/avatar-fetch?placeId=0&userId=0";
+		var port = await StartRccService();
+		var jobId = Guid.NewGuid().ToString();
 
-        if (Models.Assets.Type.RightArm == assetType) {
-            modelThing = Models.Assets.Type.RightArm;
-            clothingId = Roblox.Configuration.PackageRightArmAssetId;
-        }
+		var json = new
+		{
+			Mode = "Thumbnail",
+			Settings = new
+			{
+				Type = "Avatar_R15_Action_Package",
+				Arguments = new object[]
+				{
+					Configuration.BaseUrl,
+					charApp,
+					"Png",
+					840,
+					840,
+					assets.ToArray()
+				}
+			}
+		};
 
-        if (Models.Assets.Type.LeftLeg == assetType) {
-            modelThing = Models.Assets.Type.LeftLeg;
-            clothingId = Roblox.Configuration.PackageLeftLegAssetId;
-        }
+		var serializedJson = JsonSerializer.Serialize(json);
 
-        if (Models.Assets.Type.RightLeg == assetType) {
-            modelThing = Models.Assets.Type.RightLeg;
-            clothingId = Roblox.Configuration.PackageRightLegAssetId;
-        }
+		var XML = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+		<soap:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance""
+		   xmlns:xsd=""http://www.w3.org/2001/XMLSchema""
+		   xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
+			<soap:Body>
+				<OpenJob xmlns=""http://roblox.com/"">
+					<job>
+						<id>{jobId}</id>
+						<expirationInSeconds>60</expirationInSeconds>
+						<category>0</category>
+						<cores>1</cores>
+					</job>
+					<script>
+						<name>GameServer</name>
+						<script>{serializedJson}</script>
+					</script>
+					<arguments>
+						<LuaValue>
+							<type>LUA_TNIL</type>
+						</LuaValue>
+					</arguments>
+				</OpenJob>
+			</soap:Body>
+		</soap:Envelope>";
 
-        var latestVersion = await GetLatestAssetVersion(assetId);
-        var response = await Rendering.CommandHandler.RequestPlayerThumbnail(new()
-        {
-            userId = assetId,
-            playerAvatarType = "R6",
-            assets = new List<AvatarAssetEntry>()
-            {
-                new AvatarAssetEntry()
-                {
-                    id = assetId,
-                    assetType = new AvatarAssetTypeEntry()
-                    {
-                        id = (int) assetType,
-                    }
-                },
-                new AvatarAssetEntry()
-                {
-                    id = clothingId,
-                    assetType = new AvatarAssetTypeEntry()
-                    {
-                        id = (int) modelThing,
-                    }
-                }
-            },
-            bodyColors = new AvatarBodyColors()
-            {
-                headColorId = 1001,
-                torsoColorId = 1001,
-                leftArmColorId = 1001,
-                rightArmColorId = 1001,
-                leftLegColorId = 1001,
-                rightLegColorId = 1001,
-            },
-        }, cancellationToken);
-        var key = await UploadAssetContent(response, Configuration.ThumbnailsDirectory, "png");
-        await InsertOrReplaceThumbnail(assetId, latestVersion.assetVersionId, key,
-            ModerationStatus.AwaitingApproval);
-    }
+		try
+		{
+			var res = await SendSoapRequest(port, "http://roblox.com/OpenJob", XML);
+
+			var xmlDoc = new XmlDocument();
+			xmlDoc.LoadXml(res);
+
+			var NSManager = new XmlNamespaceManager(xmlDoc.NameTable);
+			NSManager.AddNamespace("soap", "http://schemas.xmlsoap.org/soap/envelope/");
+			NSManager.AddNamespace("ns1", "http://roblox.com/");
+
+			var resNodes = xmlDoc.SelectNodes("//soap:Envelope/soap:Body/ns1:OpenJobResponse/ns1:OpenJobResult", NSManager);
+
+			foreach (XmlNode resultNode in resNodes)
+			{
+				var typeNode = resultNode.SelectSingleNode("ns1:type", NSManager);
+				var valueNode = resultNode.SelectSingleNode("ns1:value", NSManager);
+
+				if (typeNode != null && valueNode != null &&
+					typeNode.InnerText == "LUA_TSTRING" &&
+					!string.IsNullOrEmpty(valueNode.InnerText))
+				{
+					try
+					{
+						var Bytes = Convert.FromBase64String(valueNode.InnerText);
+						await SendCloseJobRequest(port, jobId);
+						var key = await UploadAssetContent(new MemoryStream(Bytes), Configuration.ThumbnailsDirectory, "png");
+						await InsertOrReplaceThumbnail(assetId, latestVersion.assetVersionId, key,
+							ModerationStatus.AwaitingApproval);
+						return;
+					}
+					catch (FormatException)
+					{
+						continue;
+					}
+				}
+			}
+
+			throw new Exception("No b64 data found in RCC response for BODY PART.");
+		}
+		catch (Exception ex)
+		{
+			Writer.Info(LogGroup.AssetRender, "Body part thumb render failed for asset {0}: {1}", assetId, ex.Message);
+			throw;
+		}
+	}
 
     #endregion
 
@@ -790,12 +993,20 @@ public class AssetsService : ServiceBase, IService
 			case Type.FrontAccessory:
 			case Type.FaceAccessory:
 			case Type.WaistAccessory:
+/* 			case Type.LeftArm:
+			case Type.LeftLeg:
+			case Type.RightArm:
+			case Type.RightLeg:
+			case Type.Torso: */
+				thumbRequests.Add(CreateAssetThumbnail(assetId, cancellationToken));
+				break;
+				 
 			case Type.LeftArm:
 			case Type.LeftLeg:
 			case Type.RightArm:
 			case Type.RightLeg:
 			case Type.Torso:
-				thumbRequests.Add(CreateAssetThumbnail(assetId, cancellationToken));
+				thumbRequests.Add(CreateBodyPartThumbnail(assetId, assetType, cancellationToken));
 				break;
 				
 			case Type.Package:

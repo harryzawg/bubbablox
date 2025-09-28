@@ -642,13 +642,13 @@ public class WebController : ControllerBase
 
 		if (canUpload == false)
 			throw new RobloxException(403, 0, "Unauthorized");
-
+/* 
 		lock (pendingAssetUploadsMux)
 		{
 			if (pendingAssetUploads >= 2)
 				throw new RobloxException(429, 0, "TooManyRequests");
 			pendingAssetUploads++;
-		}
+		} */
 
 		try
 		{
