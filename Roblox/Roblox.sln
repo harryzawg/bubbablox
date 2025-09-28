@@ -7,8 +7,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Roblox.Website", "Roblox.We
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Roblox.Libraries", "Roblox.Libraries\Roblox.Libraries.csproj", "{83B88CBD-726D-4A6B-BA76-4B97138FD578}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Roblox.Libraries.UnitTest", "Roblox.Libraries.UnitTest\Roblox.Libraries.UnitTest.csproj", "{B08874C0-096B-48EF-B438-BAC295508442}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Roblox.Dto", "Roblox.Dto\Roblox.Dto.csproj", "{738A4238-4E13-4605-B146-C4EA97A14708}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Roblox.Models", "Roblox.Models\Roblox.Models.csproj", "{99DF936F-71B9-4584-B9A0-316B81EE9557}"
@@ -17,15 +15,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Roblox.Services", "Roblox.S
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Roblox.Rendering", "Roblox.Rendering\Roblox.Rendering.csproj", "{F484154A-A906-4BD1-A666-747DCB17349A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Roblox.Rendering.Test", "Roblox.Rendering.Test\Roblox.Rendering.Test.csproj", "{8CB4C453-0BF6-4D3A-98DC-3A3D6DE2D094}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Roblox.Configuration", "Roblox.Configuration\Roblox.Configuration.csproj", "{15F92C60-6BD9-4739-9B8E-B3F7E0989269}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Roblox.Logging", "Roblox.Logging\Roblox.Logging.csproj", "{C2CA602C-FDDE-441F-881B-374A9564EFFE}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Roblox.Exceptions", "Roblox.Exceptions\Roblox.Exceptions.csproj", "{A2264037-194B-4950-ADC6-1B4B1E7E4FD6}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Roblox.IntegrationTest", "Roblox.IntegrationTest\Roblox.IntegrationTest.csproj", "{E00A6433-4880-4312-833F-227FFA5ED78B}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Roblox.AbuseDetection", "Roblox.AbuseDetection\Roblox.AbuseDetection.csproj", "{2F68B700-71E9-4BF8-ACEF-4F33BD4DAE53}"
 EndProject
