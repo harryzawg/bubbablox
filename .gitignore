@@ -1,3 +1,5 @@
 dump.rdb
 RCCService/content/**.rbxl
 RCCService/content/*.rbxl
+.vs
+.vs/
