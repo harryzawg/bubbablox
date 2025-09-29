@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # project deps
 **/node_modules
 # configuration files
@@ -78,3 +79,10 @@ game-renderer/eslint.config.js.old
 2016-roblox-main/config.goober.json
 /2016-roblox-main/.next
 /2016-roblox-main/.idea
+=======
+dump.rdb
+RCCService/content/**.rbxl
+RCCService/content/*.rbxl
+.vs
+.vs/
+>>>>>>> 4da5edb910ab663c1031dec9a3f92e18358775cf

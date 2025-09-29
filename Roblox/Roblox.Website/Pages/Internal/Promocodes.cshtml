@@ -1,4 +1,4 @@
-@page "/internal/promocodes"
+﻿@page "/internal/promocodes"
 @model Roblox.Website.Pages.Internal.Promocodes
 
 @{
@@ -6,14 +6,24 @@
 }
 
 @section MetaTags {
-    <title>Promocodes</title>
+    <title>Redeem BubbaBlox Promotions</title>
 }
 
-<div class="container mt-4 mb-4">
+@section Styles {
+    <style>
+        button[value="redeem"] {
+            background-color: #00b16f;
+            color: #f2f4f5;
+            border-radius: 10px;
+        }
+    </style>
+}
+
+<div class="container mb-4 mt-4">
     <div class="row">
         <div class="col-12">
             <div class="card card-body">
-                <h3>Promocodes</h3>
+                <h3>Redeem BubbaBlox Promotions</h3>
                 
                 @if (Model.Result != null && Model.Result.showResult)
                 {
@@ -36,7 +46,7 @@
                                                 <img class="w-100 mx-auto" src="/thumbs/asset.ashx?assetId=@Model.Result.assetId"/>
                                             </a>
                                             <div class="card-body">
-                                                <p class="mb-0 fw-bolder text-truncate">@(Model.Result.name ?? "Unknown Item")</p>
+                                                <p class="fw-bolder text-truncate mb-0">@(Model.Result.name ?? "Unknown Item")</p>
                                             </div>
                                         </div>
                                     </div>
@@ -55,7 +65,7 @@
                                                 <img class="w-100 mx-auto" src="@($"{Roblox.Configuration.BaseUrl}/UnsecuredContent/robux.png")" />
                                             </a>
                                             <div class="card-body">
-                                                <p class="mb-0 fw-bolder text-truncate">@Model.Result.robux.Value.ToString("N0") Robux</p>
+                                                <p class="fw-bolder text-truncate mb-0">@Model.Result.robux.Value.ToString("N0") Robux</p>
                                             </div>
                                         </div>
                                     </div>
@@ -94,3 +104,4 @@
         });
     </script>
 }
+
