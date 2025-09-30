@@ -337,7 +337,9 @@
 						'DeleteGroupStatus',
 						'GetAllUserStatuses',
 						'DeleteUserStatus',
-						'DeleteForumPost'
+						'DeleteForumPost',
+						'BanUser',
+						'GetUserTransactions'
 					];
 					quickConfig(permissions);
 				}}>Moderator</button>
