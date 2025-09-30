@@ -205,7 +205,7 @@
 								<h3 class="mt-2">Ban Data</h3>
 									<p class="mb-0"><span class="fw-bold">Reason</span>: <span class="monospace">{info.data["ban_reason"] || "No reason specified"}</span></p>
 									<p class="mb-0"><span class="fw-bold">Internal Reason</span>: <span class="monospace">{info.data["ban_reason_internal"] || "No internal reason specified"}</span></p>
-									<p class="mb-0"><span class="fw-bold">Author</span>: <a href={`/users/${info.data["ban_author_user_id"]}/profile`}>{info.data["ban_author_username"] || "No author"}</a></p>
+									<p class="mb-0"><span class="fw-bold">Author</span>: <a href={`/admin/manage-user/${info.data["ban_author_user_id"]}`}>{info.data["ban_author_username"] || "No author"}</a></p>
 									<p class="mb-0"><span class="fw-bold">Created</span>: {moment(info.data["ban_created_at"]).format("MMM DD YYYY, h:mm A")}</p>
 								{/if}
 							</div>
