@@ -339,6 +339,7 @@
 						'DeleteUserStatus',
 						'DeleteForumPost',
 						'BanUser',
+						'UnbanUser',
 						'GetUserTransactions'
 					];
 					quickConfig(permissions);
