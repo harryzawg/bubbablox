@@ -1302,7 +1302,7 @@ public class GameServerService : ServiceBase
 		}
 	} */
     
-	public static async Task<bool> SendSoapRequestToRcc(string URL, string XML, string SOAPAction, int maxRetries = 3)
+	public static async Task<bool> SendSoapRequestToRcc(string URL, string XML, string SOAPAction, int maxRetries = 5)
 	{
 		// added attempts for 2015/2017 cause it kinda sucks
 		for (int attempt = 1; attempt <= maxRetries; attempt++)
@@ -1348,31 +1348,42 @@ public class GameServerService : ServiceBase
 		return false;
 	}
 	
-	private async Task<bool> SendSoapRequestToRcc2021(string url, string xml, string action)
+	private async Task<bool> SendSoapRequestToRcc2021(string url, string xml, string action, int maxRetries = 8)
 	{
-		try
+		for (int attempt = 1; attempt <= maxRetries; attempt++)
 		{
-			using (var client = new HttpClient())
+			try
 			{
-				client.Timeout = TimeSpan.FromSeconds(30);
-				
-				var request = new HttpRequestMessage(HttpMethod.Post, url);
-				request.Content = new StringContent(xml, Encoding.UTF8, "text/xml");
-				request.Headers.Add("SOAPAction", $"http://roblox.com/{action}");
-				
-				var response = await client.SendAsync(request);
+				using (var client = new HttpClient())
+				{
+					client.Timeout = TimeSpan.FromSeconds(30);
+					
+					var request = new HttpRequestMessage(HttpMethod.Post, url);
+					request.Content = new StringContent(xml, Encoding.UTF8, "text/xml");
+					request.Headers.Add("SOAPAction", $"http://roblox.com/{action}");
+					
+					var response = await client.SendAsync(request);
 
-				var resContent = await response.Content.ReadAsStringAsync();
-				Console.WriteLine($"[RCC] 2018+ SOAP res: {response.StatusCode} - {resContent}");
-				
-				return response.IsSuccessStatusCode;
+					var resContent = await response.Content.ReadAsStringAsync();
+					Console.WriteLine($"[RCC] 2018+ SOAP res: {response.StatusCode} - {resContent}");
+					
+					return response.IsSuccessStatusCode;
+				}
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"[RCC2021] SOAP request failed: {ex.Message}");
+				if (attempt == maxRetries)
+				{
+					Console.WriteLine($"[RCC] could not send soap request {action} to RCC");
+					return false;
+				}
+
+				await Task.Delay(1000 * attempt);
 			}
 		}
-		catch (Exception ex)
-		{
-			Console.WriteLine($"SOAP request failed: {ex.Message}");
-			return false;
-		}
+		
+		return false;
 	}
 		
     public async Task DeleteOldGameServers()
