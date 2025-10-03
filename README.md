@@ -16,7 +16,7 @@ this guide will be mostly a mix of the original one, and some things i added.
 - <a href="https://builds.dotnet.microsoft.com/dotnet/Sdk/6.0.412/dotnet-sdk-6.0.412-win-x64.exe">.NET 6.0</a>, *to run the website*
 - <a href="https://go.dev/dl/go1.20.6.windows-amd64.msi">Go</a>, *for asset validation*
 - <a href="https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe">Python</a>, *for image validation, make sure to add to path in setup!*
-- python packages: fastapi, aiohttp, pydub, python-magic, libmagic, python-multipart, cryptography (pip install packagename to install, this also requires FFMPEG!)
+- python packages: fastapi, aiohttp, pydub, uvicorn, python-magic, python-magic-bin==0.4.14, python-multipart, cryptography (pip install packagename to install, this also requires FFMPEG!)
 
 ## requirements
 - at least Windows 10, Linux is untested as my server is a Windows machine. You should use Wine to run everything if you are using linux (or if running a Debian vps, you can use Proxmox and run a windows VM.)
