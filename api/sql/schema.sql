@@ -357,11 +357,38 @@ CREATE TABLE public.asset_place (
     access integer DEFAULT 1 NOT NULL,
     visit_count bigint DEFAULT '0'::bigint NOT NULL,
     gear_permission boolean DEFAULT false NOT NULL,
-    playable boolean DEFAULT true NOT NULL
+    playable boolean DEFAULT true NOT NULL,
+    year integer DEFAULT 2016 NOT NULL,
+    rig_type character varying(20) DEFAULT 'playerChoice'::character varying NOT NULL
 );
 
 
 ALTER TABLE public.asset_place OWNER TO postgres;
+
+--
+-- Name: asset_place_badge; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.asset_place_badge (
+    badge_id bigint NOT NULL,
+    place_id bigint NOT NULL,
+    awarded bigint DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE public.asset_place_badge OWNER TO postgres;
+
+--
+-- Name: asset_place_pass; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.asset_place_pass (
+    pass_id bigint NOT NULL,
+    place_id bigint NOT NULL
+);
+
+
+ALTER TABLE public.asset_place_pass OWNER TO postgres;
 
 --
 -- Name: asset_play_history; Type: TABLE; Schema: public; Owner: postgres
@@ -406,11 +433,11 @@ ALTER SEQUENCE public.asset_play_history_id_seq OWNED BY public.asset_play_histo
 CREATE TABLE public.asset_server (
     id uuid NOT NULL,
     asset_id bigint NOT NULL,
-    ip character varying(255) NOT NULL,
+    ip character varying(45),
     port integer NOT NULL,
-    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    server_connection character varying(255) NOT NULL
+    rccconnection character varying(100),
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone DEFAULT now()
 );
 
 
@@ -1507,6 +1534,45 @@ ALTER SEQUENCE public.moderation_overwrite_thumbnail_id_seq OWNED BY public.mode
 
 
 --
+-- Name: moderation_purchase_resale_asset; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.moderation_purchase_resale_asset (
+    id bigint NOT NULL,
+    user_asset_id bigint NOT NULL,
+    buyer_user_id bigint NOT NULL,
+    seller_user_id bigint NOT NULL,
+    asset_id bigint NOT NULL,
+    purchase_price bigint NOT NULL,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE public.moderation_purchase_resale_asset OWNER TO postgres;
+
+--
+-- Name: moderation_purchase_resale_asset_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.moderation_purchase_resale_asset_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.moderation_purchase_resale_asset_id_seq OWNER TO postgres;
+
+--
+-- Name: moderation_purchase_resale_asset_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.moderation_purchase_resale_asset_id_seq OWNED BY public.moderation_purchase_resale_asset.id;
+
+
+--
 -- Name: moderation_refund_transaction; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -1584,6 +1650,45 @@ ALTER SEQUENCE public.moderation_reset_password_id_seq OWNED BY public.moderatio
 
 
 --
+-- Name: moderation_sell_asset; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.moderation_sell_asset (
+    id bigint NOT NULL,
+    user_asset_id bigint NOT NULL,
+    user_id bigint NOT NULL,
+    asset_id bigint NOT NULL,
+    old_price bigint DEFAULT 0 NOT NULL,
+    new_price bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.moderation_sell_asset OWNER TO postgres;
+
+--
+-- Name: moderation_sell_asset_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.moderation_sell_asset_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.moderation_sell_asset_id_seq OWNER TO postgres;
+
+--
+-- Name: moderation_sell_asset_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.moderation_sell_asset_id_seq OWNED BY public.moderation_sell_asset.id;
+
+
+--
 -- Name: moderation_set_alert; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -1654,6 +1759,45 @@ ALTER SEQUENCE public.moderation_set_rap_id_seq OWNER TO postgres;
 --
 
 ALTER SEQUENCE public.moderation_set_rap_id_seq OWNED BY public.moderation_set_rap.id;
+
+
+--
+-- Name: moderation_transcripts; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.moderation_transcripts (
+    id bigint NOT NULL,
+    ticket_id bigint NOT NULL,
+    user_id bigint NOT NULL,
+    discord_id character varying(255) NOT NULL,
+    message text NOT NULL,
+    name text DEFAULT 'Ticket'::text,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+
+
+ALTER TABLE public.moderation_transcripts OWNER TO postgres;
+
+--
+-- Name: moderation_transcripts_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.moderation_transcripts_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.moderation_transcripts_id_seq OWNER TO postgres;
+
+--
+-- Name: moderation_transcripts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.moderation_transcripts_id_seq OWNED BY public.moderation_transcripts.id;
 
 
 --
@@ -2010,7 +2154,8 @@ CREATE TABLE public."user" (
     online_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     session_key integer DEFAULT 0 NOT NULL,
     is_18_plus boolean DEFAULT false NOT NULL,
-    session_expired_at timestamp with time zone
+    session_expired_at timestamp with time zone,
+    verified boolean DEFAULT false NOT NULL
 );
 
 
@@ -2091,6 +2236,23 @@ CREATE TABLE public.user_avatar_asset (
 
 
 ALTER TABLE public.user_avatar_asset OWNER TO postgres;
+
+--
+-- Name: user_avatar_type; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.user_avatar_type (
+    user_id integer NOT NULL,
+    r15 boolean DEFAULT false NOT NULL,
+    height integer DEFAULT 100 NOT NULL,
+    width integer DEFAULT 100 NOT NULL,
+    head integer DEFAULT 100 NOT NULL,
+    proportion integer DEFAULT 100 NOT NULL,
+    body_type integer DEFAULT 100 NOT NULL
+);
+
+
+ALTER TABLE public.user_avatar_type OWNER TO postgres;
 
 --
 -- Name: user_badge; Type: TABLE; Schema: public; Owner: postgres
@@ -2401,7 +2563,8 @@ CREATE TABLE public.user_hashed_ips (
     user_id bigint NOT NULL,
     hashed_ip text NOT NULL,
     last_seen timestamp without time zone NOT NULL,
-    block_status integer DEFAULT 0 NOT NULL
+    block_status integer DEFAULT 0 NOT NULL,
+    poisoned boolean DEFAULT false NOT NULL
 );
 
 
@@ -2635,11 +2798,27 @@ CREATE TABLE public.user_settings (
     gender integer DEFAULT 3 NOT NULL,
     trade_privacy integer DEFAULT 1 NOT NULL,
     trade_filter integer DEFAULT 1 NOT NULL,
-    private_message_privacy integer DEFAULT 1 NOT NULL
+    private_message_privacy integer DEFAULT 1 NOT NULL,
+    "2020_menu_enabled" integer DEFAULT 1 NOT NULL
 );
 
 
 ALTER TABLE public.user_settings OWNER TO postgres;
+
+--
+-- Name: user_signup_tokens; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.user_signup_tokens (
+    token character varying(512) NOT NULL,
+    user_id bigint,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    used_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    discord_id character varying(64)
+);
+
+
+ALTER TABLE public.user_signup_tokens OWNER TO postgres;
 
 --
 -- Name: user_status; Type: TABLE; Schema: public; Owner: postgres
@@ -3007,6 +3186,13 @@ ALTER TABLE ONLY public.moderation_overwrite_thumbnail ALTER COLUMN id SET DEFAU
 
 
 --
+-- Name: moderation_purchase_resale_asset id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.moderation_purchase_resale_asset ALTER COLUMN id SET DEFAULT nextval('public.moderation_purchase_resale_asset_id_seq'::regclass);
+
+
+--
 -- Name: moderation_refund_transaction id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -3021,6 +3207,13 @@ ALTER TABLE ONLY public.moderation_reset_password ALTER COLUMN id SET DEFAULT ne
 
 
 --
+-- Name: moderation_sell_asset id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.moderation_sell_asset ALTER COLUMN id SET DEFAULT nextval('public.moderation_sell_asset_id_seq'::regclass);
+
+
+--
 -- Name: moderation_set_alert id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -3032,6 +3225,13 @@ ALTER TABLE ONLY public.moderation_set_alert ALTER COLUMN id SET DEFAULT nextval
 --
 
 ALTER TABLE ONLY public.moderation_set_rap ALTER COLUMN id SET DEFAULT nextval('public.moderation_set_rap_id_seq'::regclass);
+
+
+--
+-- Name: moderation_transcripts id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.moderation_transcripts ALTER COLUMN id SET DEFAULT nextval('public.moderation_transcripts_id_seq'::regclass);
 
 
 --
@@ -3253,14 +3453,6 @@ ALTER TABLE ONLY public.asset_media
 
 
 --
--- Name: asset_package asset_package_package_asset_id_asset_id_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.asset_package
-    ADD CONSTRAINT asset_package_package_asset_id_asset_id_unique UNIQUE (package_asset_id, asset_id);
-
-
---
 -- Name: asset asset_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3274,6 +3466,14 @@ ALTER TABLE ONLY public.asset
 
 ALTER TABLE ONLY public.asset_play_history
     ADD CONSTRAINT asset_play_history_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: asset_server asset_server_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.asset_server
+    ADD CONSTRAINT asset_server_pkey PRIMARY KEY (id);
 
 
 --
@@ -3517,6 +3717,14 @@ ALTER TABLE ONLY public.moderation_overwrite_thumbnail
 
 
 --
+-- Name: moderation_purchase_resale_asset moderation_purchase_resale_asset_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.moderation_purchase_resale_asset
+    ADD CONSTRAINT moderation_purchase_resale_asset_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: moderation_refund_transaction moderation_refund_transaction_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3533,6 +3741,14 @@ ALTER TABLE ONLY public.moderation_reset_password
 
 
 --
+-- Name: moderation_sell_asset moderation_sell_asset_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.moderation_sell_asset
+    ADD CONSTRAINT moderation_sell_asset_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: moderation_set_alert moderation_set_alert_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3546,6 +3762,14 @@ ALTER TABLE ONLY public.moderation_set_alert
 
 ALTER TABLE ONLY public.moderation_set_rap
     ADD CONSTRAINT moderation_set_rap_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: moderation_transcripts moderation_transcripts_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.moderation_transcripts
+    ADD CONSTRAINT moderation_transcripts_pkey PRIMARY KEY (id);
 
 
 --
@@ -3642,6 +3866,14 @@ ALTER TABLE ONLY public.universe
 
 ALTER TABLE ONLY public.user_asset
     ADD CONSTRAINT user_asset_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_avatar_type user_avatar_type_user_id_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.user_avatar_type
+    ADD CONSTRAINT user_avatar_type_user_id_key UNIQUE (user_id);
 
 
 --
@@ -3829,6 +4061,14 @@ ALTER TABLE ONLY public.user_settings
 
 
 --
+-- Name: user_signup_tokens user_signup_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.user_signup_tokens
+    ADD CONSTRAINT user_signup_tokens_pkey PRIMARY KEY (token);
+
+
+--
 -- Name: user_status user_status_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3945,20 +4185,6 @@ CREATE INDEX asset_roblox_asset_id_index ON public.asset USING btree (roblox_ass
 
 
 --
--- Name: asset_server_asset_id_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX asset_server_asset_id_index ON public.asset_server USING btree (asset_id);
-
-
---
--- Name: asset_server_id_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX asset_server_id_index ON public.asset_server USING btree (id);
-
-
---
 -- Name: asset_server_player_asset_id_index; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -3970,13 +4196,6 @@ CREATE INDEX asset_server_player_asset_id_index ON public.asset_server_player US
 --
 
 CREATE INDEX asset_server_player_server_id_index ON public.asset_server_player USING btree (server_id);
-
-
---
--- Name: asset_thumbnail_asset_id_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX asset_thumbnail_asset_id_index ON public.asset_thumbnail USING btree (asset_id);
 
 
 --
@@ -4099,6 +4318,20 @@ CREATE INDEX group_wall_id_idx ON public.group_wall USING btree (group_id, id) W
 
 
 --
+-- Name: idx_user_signup_tokens_discord_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_user_signup_tokens_discord_id ON public.user_signup_tokens USING btree (discord_id);
+
+
+--
+-- Name: idx_user_signup_tokens_user_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_user_signup_tokens_user_id ON public.user_signup_tokens USING btree (user_id);
+
+
+--
 -- Name: idx_user_username_lower; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -4110,6 +4343,34 @@ CREATE UNIQUE INDEX idx_user_username_lower ON public."user" USING btree (lower(
 --
 
 CREATE INDEX moderation_bad_username_username_index ON public.moderation_bad_username USING btree (username);
+
+
+--
+-- Name: moderation_sell_asset_asset_id_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX moderation_sell_asset_asset_id_idx ON public.moderation_sell_asset USING btree (asset_id);
+
+
+--
+-- Name: moderation_sell_asset_created_at_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX moderation_sell_asset_created_at_idx ON public.moderation_sell_asset USING btree (created_at);
+
+
+--
+-- Name: moderation_sell_asset_user_asset_id_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX moderation_sell_asset_user_asset_id_idx ON public.moderation_sell_asset USING btree (user_asset_id);
+
+
+--
+-- Name: moderation_sell_asset_user_id_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX moderation_sell_asset_user_id_idx ON public.moderation_sell_asset USING btree (user_id);
 
 
 --
@@ -4131,55 +4392,6 @@ CREATE INDEX universe_asset_asset_id_index ON public.universe_asset USING btree 
 --
 
 CREATE INDEX universe_asset_universe_id_index ON public.universe_asset USING btree (universe_id);
-
-
---
--- Name: user_asset_asset_id; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX user_asset_asset_id ON public.user_asset USING btree (asset_id);
-
-
---
--- Name: user_asset_asset_id_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX user_asset_asset_id_index ON public.user_asset USING btree (asset_id);
-
-
---
--- Name: user_asset_asset_id_uaid; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX user_asset_asset_id_uaid ON public.user_asset USING btree (asset_id, id);
-
-
---
--- Name: user_asset_id_asset_id_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX user_asset_id_asset_id_index ON public.user_asset USING btree (id, asset_id);
-
-
---
--- Name: user_asset_id_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX user_asset_id_index ON public.user_asset USING btree (id);
-
-
---
--- Name: user_asset_lowest_price_assetid; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX user_asset_lowest_price_assetid ON public.user_asset USING btree (asset_id, price) WHERE ((price > 0) AND (price IS NOT NULL));
-
-
---
--- Name: user_asset_user_id_index; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX user_asset_user_id_index ON public.user_asset USING btree (user_id);
 
 
 --
@@ -4442,6 +4654,30 @@ ALTER TABLE ONLY public.moderation_reset_password
 
 ALTER TABLE ONLY public.moderation_reset_password
     ADD CONSTRAINT moderation_reset_password_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: moderation_sell_asset moderation_sell_asset_asset_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.moderation_sell_asset
+    ADD CONSTRAINT moderation_sell_asset_asset_id_fkey FOREIGN KEY (asset_id) REFERENCES public.asset(id) ON DELETE CASCADE;
+
+
+--
+-- Name: moderation_sell_asset moderation_sell_asset_user_asset_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.moderation_sell_asset
+    ADD CONSTRAINT moderation_sell_asset_user_asset_id_fkey FOREIGN KEY (user_asset_id) REFERENCES public.user_asset(id) ON DELETE CASCADE;
+
+
+--
+-- Name: moderation_sell_asset moderation_sell_asset_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.moderation_sell_asset
+    ADD CONSTRAINT moderation_sell_asset_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
 
 
 --
