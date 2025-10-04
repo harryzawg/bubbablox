@@ -692,6 +692,7 @@ public class GameServerService : ServiceBase
 
 		string originalScript = File.ReadAllText($"{Configuration.LuaScriptPath}GameServer.lua");
 		string finalScript = originalScript.Replace
+			("%baseURL%", $"{Configuration.BaseUrl}").Replace
 			("%port%", $"{NSPort}").Replace
 			("%placeId%", $"{placeId}").Replace
 			("%creatorId%", $"{uni.builderId}").Replace

@@ -1,7 +1,7 @@
 --print("[info] gameserver.txt start")
 
 ------------------- CONFIG -------------------
-local url = "http://bbblox.org";
+local url = "%baseURL%";
 local port = %port%
 local placeId = %placeId%;
 local FakePlace = 1818;
