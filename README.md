@@ -78,9 +78,9 @@ you should change GameServerAuthorization and the Authorization under Render in 
 - the reason for this is the way that RCC was compiled, it was set to use Roblox's domain which is 10 characters. just replace it with your 10 char domain (CTRL + R, then do bbblox.org as the string then replace it with your domain. make sure your direction is all)
 - do the same for the client.
 - also, change the domain in AppSettings.xml to your domain. (for clients and RCC)
-**if you decide to use your own RCC/client, you will have to add the hash of the client in ClientData.cs under ```Roblox/Roblox.Website/Controllers``` and also search for NS1 and replace your domain with roblox.com for NS1, NS2 and NS3. [example](https://zawg.ca/assets/photos/demo1.png)**
+- **if you decide to use your own RCC/client, you will have to add the hash of the client in ClientData.cs under ```Roblox/Roblox.Website/Controllers``` and also search for NS1 and replace your domain with roblox.com for NS1, NS2 and NS3. [example](https://zawg.ca/assets/photos/demo1.png)**
 
-## RCC access/settings keys and public keys
+## RCC access/settings keys
 
 - open Registry Editor, and navigate to: ```HKEY_LOCAL_MACHINE -> SOFTWARE -> WOW6432Node``` and go into ROBLOX Corporation and then the Roblox folder. (if they don't exist, create the keys)
 - then, inside of the Roblox folder, right click, go into New, and select String Value. Then the name should be AccessKey and set the value to whatever your RccAuthorization value in your appsettings is. (in the ```Roblox/Roblox.Website``` folder)
@@ -88,17 +88,17 @@ you should change GameServerAuthorization and the Authorization under Render in 
 - then, go into ```Roblox/Roblox.Libraries/Json``` and rename the ```RCCServiceBubbleRev2021RCCIsSoTuff.json``` or whatever it is to ```RCCServiceYourSettingsKey.json``` (replace YourSettingsKey with your settings key, once again)
 
 ## RCC public keys
-- you need to run the Generate.py file in the ```Roblox/Roblox.Website/RSA```. this will generate the private and public keys. (make sure you have Python installed and the pip package cryptography installed!)
+- you need to run the Generate.py file in the ```Roblox/Roblox.Website/RSA``` folder. this will generate the private and public keys. (make sure you have Python installed and the pip package ```cryptography``` installed!)
 ## 2016 and 2018:
-- open the RCCService folder, and drag the RCCService.exe into HXD. then do ctrl + f and type BGIAA (direction: All)
-- get your generated public key from the script you ran earlier, the file is  ```PublicKey2016.pub```. open in notepad, copy everything in it, and replace everything in HXD from BGIAA to the = sign, then save the file.
+- open the RCCService folder, and drag the RCCService.exe file into HXD. then do ctrl + f and type BGIAA (direction: All)
+- get your generated public key from the script you ran earlier, the file is  ```PublicKey2016.pub```. open in notepad, and go back to RCCService in HXD, then replace everything in HXD from BGIAA to the last = sign, then save the file.
 - for 2018, you might see multiple keys. just replace the first one.
 ## 2020
-- on 2020, the process is a bit different. do a search for MIIBI (direction: All) and the first result will be your public key.
-- open your ```PublicKey2020.pub``` in HXD. copy everything in it, then go back to your RCC file, and paste paste everything inside from the first - at BEGIN PUBLIC KEY to the last - at END PRIVATE KEY.
-- you will see multiple public keys. **replace EVERY one for it to work,** i don't know why it doesn't work when it only has one replaced, but you have to replace every one.
+- on 2020, the process is a bit different. open your RCCService.exe file in the RCCService2020 folder in HXD, and do a search for MIIBI (direction: All)
+- open your ```PublicKey2020.pub``` in HXD as well. copy everything in it, then go back to your RCCService tab, and paste everything inside from the first - at BEGIN PUBLIC KEY to the last - at END PRIVATE KEY. (there may be a period at the end, if it asks if you want to change the file size, just click cancel, and select one extra dot at the end and it should work)
+- **you will see multiple public keys. replace EVERY one for it to work, i don't know why it doesn't work when it only has one replaced, but you have to replace every one.**
 ## CLIENT
-- the client process is the same thing as RCC, just on your client EXE.
+- the client process is the same thing as RCC, just on your client EXE. (except for 2020, you only have to update 1 public key)
 
 ## the site should be setup at this point!
 
