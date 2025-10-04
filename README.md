@@ -95,8 +95,8 @@ you should change GameServerAuthorization and the Authorization under Render in 
 - for 2018, you might see multiple keys. just replace the first one.
 ## 2020
 - on 2020, the process is a bit different. do a search for MIIBI (direction: All) and the first result will be your public key.
-- paste everything inside of the generated ```PublicKey2020.pub``` from the first - at BEGIN PUBLIC KEY to the last - at END PRIVATE KEY.
-- you will see multiple public keys. you only have to replace the first one, not any others.
+- open your ```PublicKey2020.pub``` in HXD. copy everything in it, then go back to your RCC file, and paste paste everything inside from the first - at BEGIN PUBLIC KEY to the last - at END PRIVATE KEY.
+- you will see multiple public keys. **replace EVERY one for it to work,** i don't know why it doesn't work when it only has one replaced, but you have to replace every one.
 ## CLIENT
 - the client process is the same thing as RCC, just on your client EXE.
 
