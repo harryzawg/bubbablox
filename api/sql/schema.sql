@@ -372,11 +372,12 @@ ALTER TABLE public.asset_place OWNER TO postgres;
 CREATE TABLE public.asset_place_badge (
     badge_id bigint NOT NULL,
     place_id bigint NOT NULL,
-    awarded bigint DEFAULT 0 NOT NULL
+    awarded bigint DEFAULT 0 NOT NULL,
+    CONSTRAINT asset_place_badge_unique UNIQUE (badge_id, place_id)
 );
 
-
 ALTER TABLE public.asset_place_badge OWNER TO postgres;
+
 
 --
 -- Name: asset_place_pass; Type: TABLE; Schema: public; Owner: postgres

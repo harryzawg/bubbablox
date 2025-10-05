@@ -160,6 +160,7 @@ namespace Roblox.Website.Controllers
 			Response.Cookies.Delete("signupkey");
 			Response.Cookies.Delete("resetpasstoken");
 			Response.Cookies.Delete("resetpasswordverified");
+			Response.Cookies.Delete("2FACode");
 
 			HttpContext.Response.Cookies.Append(
 				".ROBLOSECURITY", 
@@ -231,14 +232,14 @@ namespace Roblox.Website.Controllers
 			{
 				if (!Temp2FATokens.TryGetValue(token, out userId))
 				{
-					return Redirect("/login/2fa?err=Invalid+or+expired+2FA+token,+please+try+logging+in+again!");
+					return Redirect("/");
 				}
 			}
 
 			bool Valid = await services.twoFactor.VerifyCode(userId, code);
 			if (!Valid)
 			{
-				return Redirect("/login/2fa?err=Bad+or+expired+2FA+code,+please+try+again!");
+				return Redirect("/login/2fa?err=Bad/expired+2FA+code,+please+try+again!");
 			}
 
 			lock (Temp2FALock)
@@ -1040,6 +1041,7 @@ namespace Roblox.Website.Controllers
 				Response.Cookies.Delete("signupkey");
 				Response.Cookies.Delete("resetpasstoken");
 				Response.Cookies.Delete("resetpasswordverified");
+				Response.Cookies.Delete("2FACode");
 				
 				return Redirect("/home");
 			}
