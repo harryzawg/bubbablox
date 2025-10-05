@@ -39,7 +39,7 @@ namespace Roblox.Website.Controllers
 
 			if (!await services.cooldown.TryIncrementBucketCooldown(loginKey, 15, TimeSpan.FromMinutes(10), attemptCount, true))
 			{
-				throw new ForbiddenException(15, "Too many attempts please wait 10 minutes before trying again.");
+				throw new ForbiddenException(15, "Too many attempts, please wait about 10 minutes before retrying!");
 			}
 		}
 		
@@ -156,51 +156,6 @@ namespace Roblox.Website.Controllers
 				isBanned = false
 			};
 		}
-		
-		public class MobileLoginReq
-		{
-			public string username { get; set; }
-			public string password { get; set; }
-		}
-		
-		[HttpPostBypass("mobileapi/login")]
-        public async Task<dynamic> MobileLogin([FromBody] MobileLoginReq request)
-        {
-            FeatureFlags.FeatureCheck(FeatureFlag.LoginEnabled);
-            await RateLimitCheck();
-
-            if (string.IsNullOrEmpty(request.username) || string.IsNullOrEmpty(request.password))
-                throw new BadRequestException(3, "Username and Password are required. Please try again.");
-
-            UserInfo userInfo;
-            try
-            {
-                userInfo = await services.users.GetUserByName(request.username);
-            }
-            catch (RecordNotFoundException)
-            {
-                throw new ForbiddenException(1, "Incorrect username or password. Please try again.");
-            }
-
-            if(await Login(request.username, request.password, userInfo.userId))
-                await CreateSessionAndSetCookie(userInfo.userId);
-
-            var userBalance = await services.economy.GetUserBalance(userInfo.userId);
-
-            return new
-            {
-                Status = "OK",
-                UserInfo = new
-                {
-                    UserName = request.username,
-                    RobuxBalance = userBalance.robux,
-                    TicketsBalance = userBalance.tickets,
-                    IsAnyBuildersClubMember = true,
-                    ThumbnailUrl = $"{Configuration.BaseUrl}/Thumbs/Avatar.ashx?userId={userInfo.userId}",
-                    UserID = userInfo.userId
-                }
-            };
-        }
 		
 		private async Task<bool> Login(string username, string password, long userId)
 		{
