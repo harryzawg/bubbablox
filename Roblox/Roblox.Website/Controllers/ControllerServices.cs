@@ -26,11 +26,6 @@ namespace Roblox.Website.Controllers
         public CooldownService cooldown { get; } = new();
         public RobloxApi robloxApi { get; } = new();
         public ChatService chat { get; } = new();
-		public GameJoinService gameJoin { get; }
-
-        public ControllerServices()
-        {
-            gameJoin = new GameJoinService(assets, users, games, avatar, gameServer, rsaSign);
-        }
+		public GameJoinService gameJoin { get; } = new();
     }
 }

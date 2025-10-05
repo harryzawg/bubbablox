@@ -4,7 +4,7 @@ using Roblox.Dto.Users;
 
 namespace Roblox.Services
 {
-    public class RSASignService
+    public class RSASignService : ServiceBase, IService
     {
 		public string SignScript(string script, bool is2048 = false)
         {
@@ -72,5 +72,7 @@ namespace Roblox.Services
 
             return $"{DateTimeStr};{FirstSigned};{SecondSigned};4";
         }
+		public bool IsThreadSafe() => true;
+        public bool IsReusable() => false;
     }
 }

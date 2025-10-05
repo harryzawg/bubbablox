@@ -13,34 +13,23 @@ namespace Roblox.Services
 {
 	public class GameJoinService : ServiceBase
 	{
-		public AssetsService Assets { get; }
-		public UsersService Users { get; }
-		public GamesService Games { get; }
-		public AvatarService Avatar { get; }
-		public GameServerService GameServer { get; }
-		public RSASignService RSA { get; }
-
-		public GameJoinService(
-			AssetsService AssetsService,
-			UsersService UsersService,
-			GamesService GamesService,
-			AvatarService AvatarService,
-			GameServerService GameServerService,
-			RSASignService RSASignService)
-		{
-			Assets = AssetsService;
-			Users = UsersService;
-			Games = GamesService;
-			Avatar = AvatarService;
-			GameServer = GameServerService;
-			RSA = RSASignService;
-		}
-
         public async Task<dynamic> GenerateJoinScript(long userId, long placeId, string jobId, int serverPort, string Ticket, string Year = "2016")
         {
+			using var Assets = ServiceProvider.GetOrCreate<AssetsService>(this);
+			using var Users = ServiceProvider.GetOrCreate<UsersService>(this);
+			using var Games = ServiceProvider.GetOrCreate<GamesService>(this);
             var UserInfo = await Users.GetUserById(userId);
             var PlaceDetails = await Assets.GetAssetCatalogInfo(placeId);
             var UniID = await Games.GetUniverseId(placeId);
+			// this should NOT ever happen, but i had errors with it so 
+			if (UserInfo == null)
+				throw new ArgumentException($"{userId} not found");
+
+			if (PlaceDetails == null)
+				throw new ArgumentException($"place {placeId} not found");
+
+			if (UniID == 0)
+				throw new ArgumentException($"universe {placeId} not found");
             
             int AccountAge = (int)(DateTime.UtcNow - UserInfo.created).TotalDays;
             var membership = await Users.GetUserMembership(userId);
@@ -85,8 +74,7 @@ namespace Roblox.Services
 
         private Task<dynamic> Generate2020JoinScript(UserInfo UserInfo, Roblox.Dto.Assets.MultiGetEntry PlaceDetails, long UniID, string jobId, int serverPort, string MembershipType, int accountAge, string Creator, string Ticket)
         {
-            var currentDateTime = DateTime.Now;
-            
+			var RSA = new RSASignService();
             return Task.FromResult<dynamic>(new
             {
                 ClientPort = 0,
@@ -123,7 +111,7 @@ namespace Roblox.Services
                 CookieStoreEnabled = true,
                 IsRobloxPlace = PlaceDetails.creatorTargetId == 1,
                 IsUnknownOrUnder13 = false,
-                SessionId = $"a3cc25b0-099b-4066-be70-e915de21e3d3|{jobId}|0|127.0.0.1|8|{currentDateTime:MM/dd/yyyy HH:mm:ss}|0|null|{Ticket}|null|null|null",
+                SessionId = $"a3cc25b0-099b-4066-be70-e915de21e3d3|{jobId}|0|127.0.0.1|8|{DateTime.Now:MM/dd/yyyy HH:mm:ss}|0|null|{Ticket}|null|null|null",
                 DataCenterId = 0,
                 UniID = UniID,
                 BrowserTrackerId = 0,
