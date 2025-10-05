@@ -7,6 +7,7 @@ namespace Roblox.Website.Controllers
     {
         public AssetsService assets { get; } = new();
         public UsersService users { get; } = new();
+		public TwoFactorService twoFactor { get; } = new();
         public AccountInformationService accountInformation { get; } = new();
         public AvatarService avatar { get; } = new();
         public FriendsService friends { get; } = new();

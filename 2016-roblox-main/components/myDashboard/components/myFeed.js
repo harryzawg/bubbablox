@@ -22,7 +22,7 @@ div.list-body {
   max-width: calc(100% - 100px);
 }
 html,body {
-  font-family: "Gotham SSm", serif;
+  font-family: "Source Sans Pro", serif;
 }
 p {
   padding: 0;

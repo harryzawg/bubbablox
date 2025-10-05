@@ -2,7 +2,7 @@ html,
 body {
 	padding: 0;
 	margin: 0;
-	font-family: 'Gotham SSm', Arial, Helvetica, sans-serif;
+	font-family: 'Source Sans Pro', Arial, Helvetica, sans-serif;
 	font-size: 14px;
 	min-height: 100vh;
 }
@@ -10,7 +10,7 @@ div#__next > div > div.container {
 	min-height: 100vh;
 }
 html > body {
-	font-family: 'Gotham SSm', serif;
+	font-family: 'Source Sans Pro', serif;
 }
 
 a {

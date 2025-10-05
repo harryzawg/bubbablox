@@ -128,6 +128,24 @@ namespace Roblox.Website.Controllers
 			{
 				return Redirect("/?loginmsg=" + Uri.EscapeDataString(LockedAccountMessage));
 			}
+				
+			bool Is2FAEnabled = await services.twoFactor.IsEnabled(userId);
+			if (Is2FAEnabled)
+			{
+				var TempAuth = GenerateTemp2FAToken(userId);
+				var TempAuthExp = DateTimeOffset.UtcNow.AddMinutes(15);
+					
+				Response.Cookies.Append("2FACode", TempAuth, new CookieOptions
+				{
+					HttpOnly = true,
+					Secure = true,
+					SameSite = SameSiteMode.Lax,
+					Expires = TempAuthExp
+				});
+
+				return Redirect("/login/2fa");
+			}
+
 
 			var sess = await services.users.CreateSession(userId);
 			var sesscookie = Middleware.SessionMiddleware.CreateJwt(new Middleware.JwtEntry()
@@ -146,6 +164,110 @@ namespace Roblox.Website.Controllers
 			HttpContext.Response.Cookies.Append(
 				".ROBLOSECURITY", 
 				sesscookie,
+				new CookieOptions
+				{
+					HttpOnly = true,
+					Secure = true,
+					SameSite = SameSiteMode.None,
+					Expires = DateTimeOffset.Now.AddYears(1)
+				});
+
+			return Redirect("/home");
+		}
+		
+		private static readonly Dictionary<string, long> Temp2FATokens = new Dictionary<string, long>();
+		private static readonly object Temp2FALock = new object();
+		
+		private string GenerateTemp2FAToken(long userId)
+		{
+			var token = Guid.NewGuid().ToString();
+
+			lock (Temp2FALock)
+			{
+				Temp2FATokens[token] = userId;
+			}
+
+			_ = Task.Run(async () =>
+			{
+				await Task.Delay(TimeSpan.FromMinutes(15));
+				lock (Temp2FALock)
+				{
+					Temp2FATokens.Remove(token);
+				}
+			});
+
+			return token;
+		}
+		
+		// stupid? yes
+		[HttpGet("login/2fa")]
+		public IActionResult TwoFAPage()
+		{
+			var HTML = Path.Combine(Configuration.PublicDirectory, "Data", "2FA.html");
+			if (!System.IO.File.Exists(HTML))
+				return NotFound();
+
+			var content = System.IO.File.ReadAllText(HTML);
+			// FUCK csp.
+			var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
+			content = content.Replace("{{NONCE}}", nonce);
+
+			Response.Headers["Content-Security-Policy"] =
+				$"script-src 'self' 'nonce-{nonce}'";
+
+			return Content(content, "text/html");
+		}
+
+		[HttpPost("login/2fa")]
+		public async Task<IActionResult> TwoFactorLogin([FromForm] string code)
+		{
+			var token = Request.Cookies["2FACode"];
+			
+			if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(code))
+				return Redirect("/login/2fa?err=Bad+token+or+code");
+
+			long userId;
+			lock (Temp2FALock)
+			{
+				if (!Temp2FATokens.TryGetValue(token, out userId))
+				{
+					return Redirect("/login/2fa?err=Invalid+or+expired+2FA+token,+please+try+logging+in+again!");
+				}
+			}
+
+			bool Valid = await services.twoFactor.VerifyCode(userId, code);
+			if (!Valid)
+			{
+				return Redirect("/login/2fa?err=Bad+or+expired+2FA+code,+please+try+again!");
+			}
+
+			lock (Temp2FALock)
+			{
+				Temp2FATokens.Remove(token);
+			}
+
+			HttpContext.Response.Cookies.Append(
+				"2FACode",
+				"",
+				new CookieOptions
+				{
+					HttpOnly = true,
+					Secure = true,
+					SameSite = SameSiteMode.None,
+					// expire, cause the login was successful
+					Expires = DateTimeOffset.UnixEpoch
+				});
+
+			var sess = await services.users.CreateSession(userId);
+			var sessCookie = Middleware.SessionMiddleware.CreateJwt(new Middleware.JwtEntry
+			{
+				sessionId = sess,
+				createdAt = DateTimeOffset.Now.ToUnixTimeSeconds()
+			});
+
+			HttpContext.Response.Cookies.Append(
+				".ROBLOSECURITY",
+				sessCookie,
 				new CookieOptions
 				{
 					HttpOnly = true,
@@ -809,7 +931,7 @@ namespace Roblox.Website.Controllers
 				{
 					await services.users.LinkDiscordAccount(newuser.userId, DiscordID);
 				}
-
+		
 				var sess = await services.users.CreateSession(newuser.userId);
 
 				var sesscookie = Middleware.SessionMiddleware.CreateJwt(new Middleware.JwtEntry()

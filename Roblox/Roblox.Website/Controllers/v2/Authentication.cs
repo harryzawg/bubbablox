@@ -17,6 +17,67 @@ namespace Roblox.Website.Controllers;
 [Route("/apisite/auth/v2")]
 public class AuthenticationControllerV2 : ControllerBase
 {
+	public class Enable2FARequest
+    {
+        public string Code { get; set; }
+    }
+	
+	public class Disable2FARequest
+    {
+        public string Code { get; set; }
+    }
+	
+	[HttpGet("user/two-step/setup")]
+	public async Task<dynamic> Get2FASetup()
+	{
+		var isEnabled = await services.twoFactor.IsEnabled(safeUserSession.userId);
+		if (isEnabled)
+		{
+			return new
+			{
+				enabled = true,
+			};
+		}
+
+		var Secret = await services.twoFactor.Setup(safeUserSession.userId);
+		return new
+		{
+			enabled = false,
+			totp = Secret
+		};
+	}
+
+	
+	[HttpPost("user/two-step/enable")]
+	public async Task Enable2FA([FromBody] Enable2FARequest request)
+	{
+		var isValid = await services.twoFactor.VerifyCode(safeUserSession.userId, request.Code);
+		if (!isValid)
+		{
+			throw new BadRequestException(0, "Bad or expired code");
+		}
+
+		await services.twoFactor.MarkEnabled(safeUserSession.userId);
+	}
+	
+	[HttpPost("user/two-step/disable")]
+	public async Task Disable2FA([FromBody] Disable2FARequest request)
+	{
+		var isEnabled = await services.twoFactor.IsEnabled(safeUserSession.userId);
+		if (!isEnabled)
+		{
+			throw new BadRequestException(0, "2FA is not enabled");
+		}
+
+		var isValid = await services.twoFactor.VerifyCode(safeUserSession.userId, request.Code);
+		if (!isValid)
+		{
+			throw new BadRequestException(1, "Bad 2FA code");
+		}
+
+		await services.twoFactor.Disable2FA(safeUserSession.userId);
+	}
+
     [HttpGet("metadata")]
     public dynamic GetMetadata()
     {
