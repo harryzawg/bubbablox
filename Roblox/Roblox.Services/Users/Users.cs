@@ -27,7 +27,6 @@ using Roblox.Dto.Tickets;
 using Type = Roblox.Models.Assets.Type;
 
 namespace Roblox.Services;
-
 public class UsersService : ServiceBase, IService
 {
     public async Task<bool> IsNameAvailableForNameChange(long contextUserId, string username)
@@ -158,6 +157,15 @@ public class UsersService : ServiceBase, IService
 		var hasher = new PasswordHasher();
 		return hasher.Verify(dbPass.password, password);
 	}
+    public async Task UpdatePassword(long userId, string newPassword)
+    {
+        var hasher = new PasswordHasher();
+        var hash = hasher.Hash(newPassword);
+        await UpdateAsync("user", userId, new
+        {
+            password = hash,
+        });
+    }
 
     public async Task UnlockAccount(long userId)
     {
