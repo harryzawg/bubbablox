@@ -34,6 +34,7 @@ namespace Roblox.Website.Controllers
             }
         }
 
+        [HttpGetBypass("botapi/resetpassword")]
         public async Task<dynamic> ResetPassword(long userId)
         {
             ValidateBotAuth();
