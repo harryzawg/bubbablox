@@ -13,6 +13,7 @@
       "CaptureCountersIntervalInMinutes":"5",
       "CaptureQTStudioCountersEnabled":"True",
       "DEPRECATED_GoogleAnalyticsLoadStudio":"1",
+      "DFFlagUseModerationFilterTextV2":"True",
       "DFFlagAbuseReportScreenshot":"True",
       "DFFlagAccoutrementWeldingFilteringEnabled":"False",
       "DFFlagAdditionalNetworkLogInfo":"True",
