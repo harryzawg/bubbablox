@@ -69,6 +69,8 @@
   "DFFlagCloudEditPublishBeforeTeamTestEnabled": "True",
   "DFFlagCloudEditRemoveEditorOnPlayerRemove": "True",
   "DFFlagCloudEditReplicateWorkspacePropAndCollisionFidelity": "True",
+  "DFStringFilterTextSubdomain":"textfilter",
+  "DFStringModerationFilterTextUrlV2":"moderation/v2/filtertext",
   "DFFlagCloudEditShowSaveFailureMessages": "True",
   "DFFlagCloudEditSupportImmediatePublish": "True",
   "DFFlagConfigurableFallenPartDestroyHeight": "True",

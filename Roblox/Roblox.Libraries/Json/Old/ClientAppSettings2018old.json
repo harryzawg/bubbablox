@@ -12,6 +12,8 @@
     "COPY_FROM_HERE_TO_OTHER_ENV_DO_NOT_CHANGE_ABOVE_FLAGS": "False",
     "AllowVideoPreRoll": "True",
     "AxisAdornmentGrabSize": "12",
+    "DFStringFilterTextSubdomain":"textfilter",
+    "DFStringModerationFilterTextUrlV2":"moderation/v2/filtertext",
     "CaptureCountersIntervalInMinutes": "5",
     "CaptureQTStudioCountersEnabled": "True",
     "DFFlagAccoutrementWeldingFilteringEnabled": "False",
