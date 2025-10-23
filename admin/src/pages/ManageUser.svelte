@@ -255,7 +255,7 @@
 							class="btn-outline-danger btn w-100"
 							on:click={(e) => {
 								e.preventDefault();
-								modalBody = 'Confirm complete account deletion. All items will be transferred to BadDecisions, all other uploaded content (status, desc, forum posts, comments, etc) will be scrubbed. Username will be changed to "[ Account Deleted (userId) ]. Password will be reset. Cannot be reveresed.';
+								modalBody = 'Confirm complete account deletion. All items will be transferred to BadDecisions, all other uploaded content (status, desc, forum posts, comments, etc) will be scrubbed. Username will be changed to "bubbablox_user_userId". Password will be reset. Cannot be reveresed.';
 								modalCb = (t) => {
 									if (t) {
 										// null

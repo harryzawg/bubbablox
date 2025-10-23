@@ -184,7 +184,7 @@ public class UsersService : ServiceBase, IService
         {
             throw new AccountLastOnlineTooRecentlyException();
         }
-        var newUsername = "[ Account Deleted (" + userId + ") ]";
+        var newUsername = "bubbablox_user_" + userId;
         var transferId = await GetUserIdFromUsername("BadDecisions");
         await InTransaction(async _ =>
         {
@@ -291,7 +291,7 @@ public class UsersService : ServiceBase, IService
 
     public async Task ResetUsername(long userId, long requesterUserId)
     {
-        var newName = "[ Account Reset (" + userId + ") ]";
+        var newName = "bubbablox_user_" + userId;
         await db.ExecuteAsync(
             "INSERT INTO moderation_bad_username_log (username, user_id, author_id) VALUES (:name, :id, :author)", new
             {
