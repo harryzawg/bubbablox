@@ -130,3 +130,5 @@ you should change GameServerAuthorization and the Authorization under Render in 
 ## it says CURL error and prints a bunch of text, ini and dmp files, or says 400 Bad Request a bunch of times:
 - go to ```%localappdata%\Roblox\logs``` and delete everything, this happens when there are dump files in the directory
 ## i will add more here if more people have issues.
+
+higu
