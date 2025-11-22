@@ -85,7 +85,8 @@ you should change GameServerAuthorization and the Authorization under Render in 
 - open Registry Editor, and navigate to: ```HKEY_LOCAL_MACHINE -> SOFTWARE -> WOW6432Node``` and go into ROBLOX Corporation and then the Roblox folder. (if they don't exist, create the keys)
 - then, inside of the Roblox folder, right click, go into New, and select String Value. Then the name should be AccessKey and set the value to whatever your RccAuthorization value in your appsettings is. (in the ```Roblox/Roblox.Website``` folder)
 - then, make another string value named SettingsKey and set the value to whatever you want. after doing this, you should update AllowedQuietGetJson in your appsettings to have RCCServiceYourSettingsKey and just your settings key, replace YourSettingsKey with your actual settings key.
-- then, go into ```Roblox/Roblox.Libraries/Json``` and rename the ```RCCServiceBubbleRev2021RCCIsSoTuff.json``` or whatever it is to ```RCCServiceYourSettingsKey.json``` (replace YourSettingsKey with your settings key, once again)
+- then, go into ```Roblox/Roblox.Libraries/Json``` and rename the ```RCCServiceBubbleRev2021RCCIsSoTuff.json``` or whatever it is to ```RCCServiceYourSettingsKey.json``` (replace YourSettingsKey with your settings key, once again).
+- you should also do the same thing in the ```Roblox/Roblox.Website/Controllers/Internal/Other/ClientData.cs``` and do a search for ```/v1/settings/application```. Look for the ```RCCServiceBubbleRev2021RCCIsSoTuff``` and replace it with ```RCCServiceYourSettingsKey``` replacing YourSettingsKey with your actual settings key
 
 ## RCC public keys
 - you need to run the Generate.py file in the ```Roblox/Roblox.Website/RSA``` folder. this will generate the private and public keys. (make sure you have Python installed and the pip package ```cryptography``` installed!)

@@ -460,7 +460,6 @@ export default class CommandHandler extends StdExceptions {
                 let item = this.JobQueue[0];
                 if (!item) {
                     console.log('[info] job queue empty, no more jobs left');
-                    await sendtohook('job queue empty');
                     return;
                 }
                 
