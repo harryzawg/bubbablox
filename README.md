@@ -74,7 +74,7 @@ you should change GameServerAuthorization and the Authorization under Render in 
 
 # RCC domain patch
 
-- download [HxD](https://mh-nexus.de/en/downloads.php?product=HxD20), go into the RCCService folder, RCCService.exe file into it. make sure the domain you are using for this is exactly 10 characters, or it won't work correctly without a workaround (provided below).
+- download [HxD](https://mh-nexus.de/en/downloads.php?product=HxD20), go into the RCCService folder, RCCService.exe file into it. make sure the domain you are using for this is exactly 10 characters. it needs to be EXACTLY 10 characters.
 - the reason for this is the way that RCC was compiled, it was set to use Roblox's domain which is 10 characters. just replace it with your 10 char domain (CTRL + R, then do bbblox.org as the string then replace it with your domain. make sure your direction is all)
 - do the same for the client.
 - also, change the domain in AppSettings.xml to your domain. (for clients and RCC)
