@@ -3,7 +3,7 @@
     <p>
       <h1>BubbaBlox</h1>
 	  <h2>There are not any item/login vulnerabilities, please do research before assuming<h2>
-	  <a href="https://github.com/harryzawg/bubbablox-v2/info/vuln.md">Read please</a>
+	  <a href="https://github.com/harryzawg/bubbablox-v2/tree/2021/info/vuln.md">Read please</a>
     </p>
 </div>
 
