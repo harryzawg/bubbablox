@@ -508,18 +508,18 @@ namespace Roblox.Website.Controllers
 
 				long ID;
 				// THIS IS TESTING. Remove in the future plz
-				if (discordUser.id == "713175126358884483")
+				//if (discordUser.id == "713175126358884483")
+				//{
+				//	ID = 1;
+				//}
+				//else
+				//{
+				ID = await services.users.GetUserIdFromDiscordId(discordUser.id);
+				if (ID == 0)
 				{
-					ID = 1;
+					return Redirect("/?loginmsg=There is no account linked to this Discord");
 				}
-				else
-				{
-					ID = await services.users.GetUserIdFromDiscordId(discordUser.id);
-					if (ID == 0)
-					{
-						return Redirect("/?loginmsg=There is no account linked to this Discord");
-					}
-				}
+				//}
 
 				var info = await services.users.GetUserById(ID);
 				if (info.accountStatus != AccountStatus.Ok)
