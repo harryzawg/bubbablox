@@ -2,8 +2,14 @@
 <div align="center">
     <p>
       <h1>BubbaBlox</h1>
-	  <h2>There are not any item/login vulnerabilities, please do research before assuming<h2>
-	  <a href="https://github.com/harryzawg/bubbablox-v2/tree/2021/info/vuln.md">Read please</a>
+	  <h2>
+		  We now have an autodeployer which automatically sets BubbaBlox up 
+		  <a href="https://github.com/harryzawg/bubbablox-autodeployer">here</a>
+	  </h2>
+	  <h2>
+		  There are not any item/login vulnerabilities, please do research before assuming
+		  <a href="https://github.com/harryzawg/bubbablox-v2/tree/2021/info/vuln.md">Read</a>
+	  <h2>
     </p>
 </div>
 
