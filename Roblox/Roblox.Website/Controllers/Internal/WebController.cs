@@ -1,5 +1,6 @@
-Lol im crine
-
+dont use bubba i mean it 
+its garbage
+anybody who uses this is stupid and you should just make your own revival
 
 using System.ComponentModel.DataAnnotations;
 using System.Text;
