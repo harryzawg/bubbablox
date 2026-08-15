@@ -1,3 +1,6 @@
+# Known RCE discovered, don’t use or especially selfhost unless you wanna get nuked
+
+
 No longer maintained. Please do not use this source.\
 It's terrible, unoptimized and riddled with issues and vulnerabilities
 
